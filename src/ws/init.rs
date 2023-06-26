@@ -12,53 +12,52 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use inquire::{error::InquireResult, required, Confirm, Text};
+use std::path::PathBuf;
 
-pub struct PromptValues {
-    pub name: String,
-    pub email: String,
-    pub signing_key: String,
+use super::{config::WSConfig, prompt::init_prompt, workspace::Workspace};
+
+pub fn init(path: &PathBuf) -> Result<Workspace, ()> {
+    let arcpath = path.join(".arc");
+    let cfgpath = arcpath.join("config.json");
+
+    if !path.exists() || !arcpath.exists() || !cfgpath.exists() {
+        match create_workspace(path) {
+            Ok(_) => {}
+            Err(_) => {
+                log::error!("Unable to create workspace at {}", path.display());
+                return Err(());
+            }
+        };
+    }
+
+    Workspace::open(path)
 }
 
-pub async fn prompt() -> Result<PromptValues, ()> {
-    let name = match Text::new("User Name:").with_validator(required!()).prompt() {
-        Ok(v) => v,
-        Err(_) => return Err(()),
-    };
-    let email = match Text::new("User email:")
-        .with_validator(|v: &str| {
-            let re = regex::Regex::new(r"^[\w_\-.]+@[\w\-_.]+$").unwrap();
-            if re.is_match(&v) {
-                return Ok(inquire::validator::Validation::Valid);
-            }
-            Ok(inquire::validator::Validation::Invalid(
-                "must be an email address".into(),
-            ))
-        })
-        .prompt()
-    {
-        Ok(v) => v,
-        Err(_) => return Err(()),
-    };
-    let signing_key = match Text::new("Signing key:")
-        .with_validator(required!())
-        .prompt()
-    {
-        Ok(v) => v,
-        Err(_) => return Err(()),
-    };
+fn create_workspace(path: &PathBuf) -> Result<(), ()> {
+    let arcpath = path.join(".arc");
+    if !arcpath.exists() {
+        std::fs::create_dir_all(&arcpath).expect("Unable to create directories");
+    }
 
-    let answer = match Confirm::new("Do you want to setup custom repositories?")
-        .with_default(false)
-        .prompt()
-    {
-        Ok(v) => v,
-        Err(_) => return Err(()),
-    };
+    assert!(arcpath.is_dir());
+    let cfgpath = arcpath.join("config.json");
+    assert!(!cfgpath.exists());
 
-    Ok(PromptValues {
-        name,
-        email,
-        signing_key,
-    })
+    let cfg = match init_prompt(&WSConfig::default()) {
+        Ok(v) => v,
+        Err(_) => {
+            log::error!("Unable to generate workspace config");
+            return Err(());
+        }
+    };
+    match cfg.write(&cfgpath) {
+        Ok(_) => {}
+        Err(_) => {
+            log::error!("Unable to write workspace config at {}", cfgpath.display());
+            return Err(());
+        }
+    };
+    log::info!("Wrote workspace config at {}", cfgpath.display());
+
+    Ok(())
 }

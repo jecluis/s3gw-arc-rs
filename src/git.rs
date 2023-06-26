@@ -12,8 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod config;
-pub mod init;
-mod prompt;
-pub mod repository;
-pub mod workspace;
+pub mod repo;

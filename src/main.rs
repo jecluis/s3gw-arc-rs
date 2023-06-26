@@ -12,9 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use log::info;
-
 mod args;
+mod git;
 mod ws;
 
 #[tokio::main]
@@ -25,11 +24,21 @@ async fn main() {
     match &cmd.command {
         args::Command::WS(cmd) => match &cmd.command {
             args::WSCmds::Init(init) => {
-                info!("path: {}", init.path.display());
-                ws::init::prompt().await;
+                log::info!("path: {}", init.path.display());
+
+                let ws = match ws::init::init(&init.path) {
+                    Ok(v) => {
+                        log::info!("Success!");
+                        v
+                    }
+                    Err(_) => {
+                        log::error!("Error!");
+                        return;
+                    }
+                };
             }
             args::WSCmds::Info => {
-                info!("info");
+                log::info!("info");
             }
         },
     };
