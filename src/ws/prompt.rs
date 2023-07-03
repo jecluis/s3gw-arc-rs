@@ -18,6 +18,8 @@ use super::config::{
     WSConfig, WSGitRepoConfigValues, WSGitReposConfig, WSRegistryConfig, WSUserConfig,
 };
 
+/// Prompt for a specific custom git repository. This is a helper function.
+///
 fn prompt_custom_git_repo_value(
     name: &str,
     default: &WSGitRepoConfigValues,
@@ -53,6 +55,8 @@ fn prompt_custom_git_repo_value(
     }))
 }
 
+/// Prompt for custom git repositories for the various tracked repositories.
+///
 fn prompt_custom_git_repos(default: &WSGitReposConfig) -> Result<WSGitReposConfig, ()> {
     let mut cfg = default.clone();
 
@@ -91,6 +95,8 @@ fn prompt_custom_git_repos(default: &WSGitReposConfig) -> Result<WSGitReposConfi
     Ok(cfg)
 }
 
+/// Prompt for a specific registry. This is a helper function.
+///
 fn prompt_custom_registry_value(name: &str, default: &String) -> Result<Option<String>, ()> {
     match Confirm::new(&format!("Set custom registry URI for {}?", name))
         .with_default(true)
@@ -111,6 +117,8 @@ fn prompt_custom_registry_value(name: &str, default: &String) -> Result<Option<S
     Ok(Some(uri))
 }
 
+/// Prompt for custom registries for deliverable artifacts.
+///
 fn prompt_custom_registries(default: &WSRegistryConfig) -> Result<WSRegistryConfig, ()> {
     let mut cfg = default.clone();
 
@@ -129,6 +137,8 @@ fn prompt_custom_registries(default: &WSRegistryConfig) -> Result<WSRegistryConf
     Ok(cfg)
 }
 
+/// Prompt for user-related informations, such as the user's name, email, etc.
+///
 fn prompt_user() -> Result<WSUserConfig, ()> {
     let name = match Text::new("User Name:").with_validator(required!()).prompt() {
         Ok(v) => v,
@@ -180,6 +190,8 @@ fn prompt_user() -> Result<WSUserConfig, ()> {
     })
 }
 
+/// Prompt the user for values required to initiate a new workspace.
+///
 pub fn init_prompt(default_config: &WSConfig) -> Result<WSConfig, ()> {
     let mut cfg = default_config.clone();
 

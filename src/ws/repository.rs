@@ -100,6 +100,9 @@ impl Repository {
         Ok(repo)
     }
 
+    /// Synchronize local repository with its upstream. If the repository does
+    /// not exist yet, it will be cloned.
+    ///
     pub fn sync<T>(self: &Self, mut progress_cb: T) -> Result<(), ()>
     where
         T: FnMut(&str, u64, u64),

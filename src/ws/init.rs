@@ -16,6 +16,7 @@ use std::path::PathBuf;
 
 use super::{config::WSConfig, prompt::init_prompt, workspace::Workspace};
 
+/// Create and initiate a new workspace at 'path'.
 pub fn init(path: &PathBuf) -> Result<Workspace, ()> {
     let arcpath = path.join(".arc");
     let cfgpath = arcpath.join("config.json");
@@ -52,6 +53,7 @@ pub fn init(path: &PathBuf) -> Result<Workspace, ()> {
     Ok(ws)
 }
 
+/// Open an existing workspace at 'path'.
 pub fn open(path: &PathBuf) -> Result<Workspace, ()> {
     match Workspace::open(path) {
         Ok(ws) => Ok(ws),
@@ -62,6 +64,8 @@ pub fn open(path: &PathBuf) -> Result<Workspace, ()> {
     }
 }
 
+/// Creates a new workspace, obtaining information required from the user (via
+/// prompts), and writes a workspace config file.
 fn create_workspace(path: &PathBuf) -> Result<(), ()> {
     let arcpath = path.join(".arc");
     if !arcpath.exists() {

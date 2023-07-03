@@ -22,6 +22,10 @@ pub struct GitRepo {
 }
 
 impl GitRepo {
+    /// Clone a repository into 'path', using the upstream remotes 'ro' and
+    /// 'rw'. 'ro' refers to a read-only URI, and 'rw' as a read-write URI.
+    /// Operation progress will be tracked by 'progress_cb'.
+    ///
     pub fn clone<F>(
         path: &PathBuf,
         ro: &String,

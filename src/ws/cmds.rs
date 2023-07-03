@@ -27,6 +27,8 @@ pub struct InitCommand {
     pub path: PathBuf,
 }
 
+/// Handles workspace-related commands.
+///
 pub fn handle_cmds(cmd: &Cmds) {
     match cmd {
         Cmds::Init(init) => {

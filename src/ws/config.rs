@@ -91,6 +91,8 @@ impl Default for WSConfig {
 }
 
 impl WSConfig {
+    /// Write current config to 'path'. The file will be created if it does not exist.
+    ///
     pub fn write(self: &Self, path: &PathBuf) -> Result<(), ()> {
         let f = match std::fs::File::options()
             .create(true)
@@ -115,6 +117,8 @@ impl WSConfig {
         Ok(())
     }
 
+    /// Read config at 'path', returning a 'WSConfig' if it exists.
+    ///
     pub fn read(path: &PathBuf) -> Result<WSConfig, ()> {
         let f = match std::fs::File::open(path) {
             Ok(v) => v,

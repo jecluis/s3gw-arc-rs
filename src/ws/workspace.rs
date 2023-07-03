@@ -28,6 +28,8 @@ pub struct Workspace {
 }
 
 impl Workspace {
+    /// Open an existing workspace at 'path'.
+    ///
     pub fn open(path: &PathBuf) -> Result<Workspace, ()> {
         let arcpath = path.join(".arc");
         let cfgpath = arcpath.join("config.json");
@@ -59,6 +61,9 @@ impl Workspace {
         })
     }
 
+    /// Synchronize the current workspace, showing progress bars for each
+    /// individual repository in the workspace.
+    ///
     pub fn sync(self: &Self) -> Result<(), ()> {
         let repos = vec![
             &self.repos.s3gw,
