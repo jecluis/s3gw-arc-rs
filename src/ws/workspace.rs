@@ -51,20 +51,12 @@ impl Workspace {
             Err(_) => return Err(()),
         };
 
-        let ws = Workspace {
+        Ok(Workspace {
             path: path.to_path_buf(),
             config: cfg,
             state: None,
             repos,
-        };
-        match ws.sync() {
-            Ok(_) => {}
-            Err(_) => {
-                log::error!("Error while synchronizing workspace");
-                return Err(());
-            }
-        };
-        Ok(ws)
+        })
     }
 
     pub fn sync(self: &Self) -> Result<(), ()> {

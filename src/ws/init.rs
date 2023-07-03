@@ -20,7 +20,10 @@ pub fn init(path: &PathBuf) -> Result<Workspace, ()> {
     let arcpath = path.join(".arc");
     let cfgpath = arcpath.join("config.json");
 
-    if !path.exists() || !arcpath.exists() || !cfgpath.exists() {
+    if cfgpath.exists() {
+        log::error!("Workspace at {} already exists.", path.display());
+        return Err(());
+    } else if !path.exists() || !arcpath.exists() || !cfgpath.exists() {
         match create_workspace(path) {
             Ok(_) => {}
             Err(_) => {
@@ -30,7 +33,33 @@ pub fn init(path: &PathBuf) -> Result<Workspace, ()> {
         };
     }
 
-    Workspace::open(path)
+    let ws = match Workspace::open(path) {
+        Ok(v) => v,
+        Err(_) => {
+            log::error!("Error opening workspace at {}", path.display());
+            return Err(());
+        }
+    };
+
+    match ws.sync() {
+        Ok(_) => {}
+        Err(_) => {
+            log::error!("Error synchronizing workspace at {}", path.display());
+            return Err(());
+        }
+    };
+
+    Ok(ws)
+}
+
+pub fn open(path: &PathBuf) -> Result<Workspace, ()> {
+    match Workspace::open(path) {
+        Ok(ws) => Ok(ws),
+        Err(_) => {
+            log::error!("Error opening workspace at {}", path.display());
+            return Err(());
+        }
+    }
 }
 
 fn create_workspace(path: &PathBuf) -> Result<(), ()> {
@@ -57,7 +86,7 @@ fn create_workspace(path: &PathBuf) -> Result<(), ()> {
             return Err(());
         }
     };
-    log::info!("Wrote workspace config at {}", cfgpath.display());
+    log::debug!("Wrote workspace config at {}", cfgpath.display());
 
     Ok(())
 }
