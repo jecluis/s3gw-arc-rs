@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use clap::{Args, Parser, Subcommand};
-use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -32,20 +31,7 @@ pub enum Command {
 #[command()]
 pub struct WorkspaceCommand {
     #[command(subcommand)]
-    pub command: WSCmds,
-}
-
-#[derive(Subcommand)]
-pub enum WSCmds {
-    Init(WSInitCommand),
-    Info,
-}
-
-#[derive(Args)]
-pub struct WSInitCommand {
-    /// Workspace Path
-    #[arg(value_name = "PATH")]
-    pub path: PathBuf,
+    pub command: crate::ws::cmds::Cmds,
 }
 
 pub fn parse() -> Cli {

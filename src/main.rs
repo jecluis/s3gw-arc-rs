@@ -22,24 +22,6 @@ async fn main() {
     let cmd = args::parse();
 
     match &cmd.command {
-        args::Command::WS(cmd) => match &cmd.command {
-            args::WSCmds::Init(init) => {
-                log::info!("path: {}", init.path.display());
-
-                let ws = match ws::init::init(&init.path) {
-                    Ok(v) => {
-                        log::info!("Success!");
-                        v
-                    }
-                    Err(_) => {
-                        log::error!("Error!");
-                        return;
-                    }
-                };
-            }
-            args::WSCmds::Info => {
-                log::info!("info");
-            }
-        },
+        args::Command::WS(cmd) => ws::cmds::handle_cmds(&cmd.command),
     };
 }
