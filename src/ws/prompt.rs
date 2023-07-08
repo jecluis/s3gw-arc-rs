@@ -52,6 +52,8 @@ fn prompt_custom_git_repo_value(
     Ok(Some(WSGitRepoConfigValues {
         readonly: ro,
         readwrite: rw,
+        tag_pattern: default.tag_pattern.clone(),
+        branch_pattern: default.branch_pattern.clone(),
     }))
 }
 

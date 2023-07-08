@@ -12,10 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod cmds;
-pub mod config;
-pub mod init;
-mod prompt;
-pub mod repository;
-pub mod version;
-pub mod workspace;
+use super::Workspace;
+
+impl Workspace {
+    pub fn info(self: &Self) {
+        log::info!("Details for workspace '{}'", self.path.display());
+
+        if self.state.is_none() {
+            log::info!("Workspace version not set.");
+            return;
+        }
+    }
+}

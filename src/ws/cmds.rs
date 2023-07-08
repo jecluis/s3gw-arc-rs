@@ -67,7 +67,7 @@ pub fn handle_cmds(cmd: &Cmds) {
             return;
         }
         Cmds::Info => {
-            log::info!("info");
+            ws.info();
         }
     };
 }
