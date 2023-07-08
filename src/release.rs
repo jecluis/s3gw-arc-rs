@@ -12,18 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod args;
-mod git;
-mod release;
-mod ws;
+pub mod cmds;
+mod list;
 
-#[tokio::main]
-async fn main() {
-    env_logger::init();
-    let cmd = args::parse();
-
-    match &cmd.command {
-        args::Command::WS(cmd) => ws::cmds::handle_cmds(&cmd.command),
-        args::Command::Rel(cmd) => release::cmds::handle_cmds(&cmd.command),
-    };
-}
+pub struct Release {}

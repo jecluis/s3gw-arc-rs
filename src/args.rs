@@ -23,8 +23,10 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Command {
-    /// Workspace related actions
+    /// Workspace related actions.
     WS(WorkspaceCommand),
+    /// Release related actions.
+    Rel(ReleaseCommand),
 }
 
 #[derive(Args)]
@@ -32,6 +34,13 @@ pub enum Command {
 pub struct WorkspaceCommand {
     #[command(subcommand)]
     pub command: crate::ws::cmds::Cmds,
+}
+
+#[derive(Args)]
+#[command()]
+pub struct ReleaseCommand {
+    #[command(subcommand)]
+    pub command: crate::release::cmds::Cmds,
 }
 
 pub fn parse() -> Cli {
