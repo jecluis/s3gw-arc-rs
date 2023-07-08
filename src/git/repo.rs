@@ -71,6 +71,52 @@ impl GitRepo {
         })
     }
 
+    /// Open an existing git repository at 'path'.
+    ///
+    pub fn open(path: &PathBuf) -> Result<GitRepo, ()> {
+        let repo = match git2::Repository::open(path) {
+            Ok(v) => v,
+            Err(e) => {
+                log::error!("Error opening repository at {}: {}", path.display(), e);
+                return Err(());
+            }
+        };
+
+        fn get_remote_url(r: &git2::Remote) -> String {
+            String::from(r.url().unwrap())
+        }
+
+        let ro = match repo.find_remote("ro") {
+            Ok(v) => get_remote_url(&v),
+            Err(e) => {
+                log::error!(
+                    "Unable to obtain read-only remote for {}: {}",
+                    path.display(),
+                    e
+                );
+                return Err(());
+            }
+        };
+        let rw = match repo.find_remote("rw") {
+            Ok(v) => get_remote_url(&v),
+            Err(e) => {
+                log::error!(
+                    "Unable to obtain read-write remote for {}: {}",
+                    path.display(),
+                    e
+                );
+                return Err(());
+            }
+        };
+
+        Ok(GitRepo {
+            path: path.to_path_buf(),
+            ro,
+            rw,
+            repo,
+        })
+    }
+
     /// set user name.
     pub fn set_user_name(self: &Self, name: &str) -> &Self {
         self.repo
@@ -97,5 +143,94 @@ impl GitRepo {
         cfg.set_str("user.signingKey", key).unwrap();
         cfg.set_bool("commit.gpgSign", true).unwrap();
         self
+    }
+    pub fn get_default_branch(self: &Self) -> String {
+        let head_ref = self
+            .repo
+            .find_reference("refs/remotes/ro/HEAD")
+            .expect("Unable to find reference");
+        let tgt = head_ref
+            .symbolic_target()
+            .expect("Unable to get symbolic target for head reference");
+        let branch = tgt
+            .strip_prefix("refs/remotes/ro/")
+            .expect("Unable to obtain branch name from target string!");
+        String::from(branch)
+    }
+
+    pub fn get_graph_diff(
+        self: &Self,
+        local: git2::Oid,
+        upstream: git2::Oid,
+    ) -> Result<(usize, usize), ()> {
+        match self.repo.graph_ahead_behind(local, upstream) {
+            Ok(v) => Ok(v),
+            Err(e) => {
+                log::error!("Unable to obtain graph diff: {}", e);
+                Err(())
+            }
+        }
+    }
+
+    fn _open_remote(self: &Self, name: &str) -> Result<git2::Remote, ()> {
+        let mut remote = match self.repo.find_remote(name) {
+            Ok(r) => r,
+            Err(e) => {
+                log::error!("Unable to find remote '{}': {}", name, e);
+                return Err(());
+            }
+        };
+        match remote.connect(git2::Direction::Fetch) {
+            Ok(_) => {}
+            Err(e) => {
+                log::error!("Unable to connect to remote '{}': {}", name, e);
+                return Err(());
+            }
+        };
+        Ok(remote)
+    }
+
+    fn _remote_update(self: &Self, name: &str) -> Result<(), ()> {
+        let mut remote = match self._open_remote(name) {
+            Ok(v) => v,
+            Err(_) => {
+                log::error!("Unable to open remote '{}'", name);
+                return Err(());
+            }
+        };
+        log::info!("Updating remote '{}'", name);
+        let x: [&str; 0] = [];
+        match remote.fetch(&x, None, None) {
+            Ok(_) => {}
+            Err(e) => {
+                log::error!("Unable to update remote '{}': {}", name, e);
+                return Err(());
+            }
+        };
+        log::info!("Remote '{}' updated", name);
+        Ok(())
+    }
+
+    pub fn remote_update(self: &Self) -> Result<(), ()> {
+        self._remote_update("ro")
+    }
+
+    pub fn get_refs(self: &Self) -> Result<super::refs::GitRefs, ()> {
+        let remote = match self._open_remote("ro") {
+            Ok(v) => v,
+            Err(_) => {
+                log::error!("Unable to open remote to obtain refs!");
+                return Err(());
+            }
+        };
+        let refs = match super::refs::GitRefs::from_remote(&remote) {
+            Ok(v) => v,
+            Err(_) => {
+                log::error!("Unable to obtain refs from remote!");
+                return Err(());
+            }
+        };
+
+        Ok(refs)
     }
 }
