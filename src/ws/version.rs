@@ -16,7 +16,6 @@ use std::fmt::Display;
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct Version {
-    pub version: String,
     pub major: u64,
     pub minor: u64,
     pub patch: Option<u64>,
@@ -80,8 +79,6 @@ impl Version {
             );
         }
 
-        let version = m.get(1).expect("version must not be empty!").as_str();
-
         let major: u64 = m
             .get(2)
             .expect("major version should not be empty!")
@@ -105,7 +102,6 @@ impl Version {
         }
 
         Ok(Version {
-            version: String::from(version),
             major,
             minor,
             patch,
@@ -141,5 +137,15 @@ impl Version {
             None => String::new(),
         };
         format!("{}.{}{}{}", self.major, self.minor, p, rc,)
+    }
+
+    pub fn get_base_version(self: &Self) -> Version {
+        assert!(self.patch.is_some());
+        Version {
+            major: self.major,
+            minor: self.minor,
+            patch: self.patch,
+            rc: None,
+        }
     }
 }
