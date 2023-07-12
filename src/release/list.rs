@@ -16,11 +16,54 @@ use std::collections::{HashMap, HashSet};
 
 use tabled::settings::{Merge, Style};
 
-use crate::ws::{version::Version, workspace::Workspace};
+use crate::ws::{repository::Repository, version::Version, workspace::Workspace};
 
 use super::Release;
 
+pub struct ReleaseVersions {
+    pub releases: Vec<Version>,
+    pub versions_per_release: HashMap<String, Vec<Version>>,
+}
+
 impl Release {
+    /// Obtain a list of versions per release version
+    ///
+    pub fn get_repo_versions_per_release(repo: &Repository) -> Result<ReleaseVersions, ()> {
+        let mut versions_per_release: HashMap<String, Vec<Version>> = HashMap::new();
+        let mut releases: Vec<Version> = vec![];
+
+        let versions = match repo.get_release_versions() {
+            Ok(v) => v,
+            Err(_) => {
+                log::error!("Error obtaining releases from repository '{}'", repo.name);
+                return Err(());
+            }
+        };
+
+        for release in &versions {
+            let relver = release.release_version.get_release_version_str();
+            if !versions_per_release.contains_key(&relver) {
+                versions_per_release.insert(relver.clone(), vec![]);
+            }
+
+            let version_vec = &mut versions_per_release.get_mut(&relver).unwrap();
+            for version in &release.versions {
+                let v = version.clone();
+                if !version_vec.contains(&v) {
+                    version_vec.push(v);
+                }
+            }
+            version_vec.sort_by_key(|x: &Version| x.get_version_id());
+            releases.push(release.release_version.clone());
+        }
+        releases.sort_by_key(|e: &Version| e.get_version_id());
+
+        Ok(ReleaseVersions {
+            releases: releases,
+            versions_per_release: versions_per_release,
+        })
+    }
+
     /// List releases in a given workspace 'ws'.
     ///
     pub fn list(ws: &Workspace) {
@@ -42,27 +85,37 @@ impl Release {
         let mut release_per_repo: HashMap<String, HashMap<String, HashSet<String>>> =
             HashMap::new();
 
+        // aggregate versions for all repos
         let mut versions_per_release: HashMap<String, Vec<Version>> = HashMap::new();
         let mut release_versions: Vec<Version> = vec![];
 
         for repo in repos {
             repo_names.push(repo.name.clone());
-            let versions = match repo.get_release_versions() {
+            release_per_repo.insert(repo.name.clone(), HashMap::new());
+            let repo_hm = &mut release_per_repo.get_mut(&repo.name).unwrap();
+
+            let repo_release_versions = match Release::get_repo_versions_per_release(&repo) {
                 Ok(v) => v,
                 Err(_) => {
-                    log::error!("Error obtaining release versions for repo {}", repo.name);
+                    log::error!("Error obtaining release versions for repo '{}'", repo.name);
                     return;
                 }
             };
 
-            release_per_repo.insert(repo.name.clone(), HashMap::new());
-            let repo_hm = &mut release_per_repo.get_mut(&repo.name).unwrap();
-
-            for release in &versions {
-                if !release_versions.contains(&release.release_version) {
-                    release_versions.push(release.release_version.clone());
+            for release_ver in &repo_release_versions.releases {
+                if !release_versions.contains(&release_ver) {
+                    release_versions.push(release_ver.clone());
                 }
-                let relver = release.release_version.get_release_version_str();
+
+                let relver = release_ver.get_release_version_str();
+                assert!(repo_release_versions
+                    .versions_per_release
+                    .contains_key(&relver));
+                let repo_ver_vec = repo_release_versions
+                    .versions_per_release
+                    .get(&relver)
+                    .unwrap();
+
                 if !versions_per_release.contains_key(&relver) {
                     versions_per_release.insert(relver.clone(), vec![]);
                 }
@@ -72,16 +125,15 @@ impl Release {
                 }
 
                 let rel_hs = &mut repo_hm.get_mut(&relver).unwrap();
-
                 let ver_vec = &mut versions_per_release.get_mut(&relver).unwrap();
-                for ver in &release.versions {
-                    let v = ver.clone();
-                    if !ver_vec.contains(&v) {
-                        ver_vec.push(v);
-                    }
+                for ver in repo_ver_vec {
                     let v_str = ver.get_version_str();
                     if !rel_hs.contains(&v_str) {
                         rel_hs.insert(v_str.clone());
+                    }
+
+                    if !ver_vec.contains(&ver) {
+                        ver_vec.push(ver.clone());
                     }
                 }
             }
