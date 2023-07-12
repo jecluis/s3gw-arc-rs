@@ -17,7 +17,6 @@ use std::path::PathBuf;
 #[derive(clap::Subcommand)]
 pub enum Cmds {
     Init(InitCommand),
-    Info,
 }
 
 #[derive(clap::Args)]
@@ -65,9 +64,6 @@ pub fn handle_cmds(cmd: &Cmds) {
         Cmds::Init(_) => {
             log::error!("Should never reach this point!");
             return;
-        }
-        Cmds::Info => {
-            ws.info();
         }
     };
 }

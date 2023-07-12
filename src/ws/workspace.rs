@@ -16,15 +16,11 @@ use std::path::PathBuf;
 
 use super::{config::WSConfig, repository::Repos};
 
-pub struct WSState {}
-
-mod info;
 mod sync;
 
 pub struct Workspace {
     path: PathBuf,
     config: WSConfig,
-    state: Option<WSState>,
     pub repos: Repos,
 }
 
@@ -34,7 +30,6 @@ impl Workspace {
     pub fn open(path: &PathBuf) -> Result<Workspace, ()> {
         let arcpath = path.join(".arc");
         let cfgpath = arcpath.join("config.json");
-        let statepath = arcpath.join("state.json");
 
         if !arcpath.exists() || !cfgpath.exists() {
             log::error!("Workspace at {} does not exist!", path.display());
@@ -57,7 +52,6 @@ impl Workspace {
         Ok(Workspace {
             path: path.to_path_buf(),
             config: cfg,
-            state: None,
             repos,
         })
     }
