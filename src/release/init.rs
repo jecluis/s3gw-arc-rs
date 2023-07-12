@@ -24,8 +24,8 @@ use super::Release;
 impl Release {
     /// Initiate a release in the given workspace.
     ///
-    pub fn init(ws: &Workspace, version_str: &Option<String>) -> Result<Release, ReleaseError> {
-        let mut release = match Release::open(&ws) {
+    pub fn init(ws: Workspace, version_str: &Option<String>) -> Result<Release, ReleaseError> {
+        let mut release = match Release::open(ws) {
             Ok(v) => v,
             Err(_) => {
                 log::error!("Error opening release, unable to init!");
@@ -62,7 +62,7 @@ impl Release {
 
         log::debug!("init version {}", version);
 
-        match ws.sync() {
+        match release.ws.sync() {
             Ok(_) => {}
             Err(_) => {
                 log::error!("Error synchronizing workspace!");
@@ -70,7 +70,7 @@ impl Release {
             }
         };
 
-        let release_versions = match ws.repos.s3gw.get_release_versions() {
+        let release_versions = match release.ws.repos.s3gw.get_release_versions() {
             Ok(v) => v,
             Err(_) => {
                 log::error!("Unable to obtain release versions for s3gw repo");

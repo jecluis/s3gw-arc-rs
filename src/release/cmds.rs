@@ -52,7 +52,7 @@ pub fn handle_cmds(cmd: &Cmds) {
         }
         Cmds::Init(cmd) => {
             log::debug!("Init release");
-            match crate::release::Release::init(&ws, &cmd.release) {
+            match crate::release::Release::init(ws, &cmd.release) {
                 Ok(release) => {
                     println!("Release {} init'ed.", release.get_version());
                 }
@@ -65,7 +65,7 @@ pub fn handle_cmds(cmd: &Cmds) {
         _ => {}
     };
 
-    let release = match crate::release::Release::open(&ws) {
+    let release = match crate::release::Release::open(ws) {
         Ok(r) => r,
         Err(_) => {
             log::error!("Unable to open workspace release config!");

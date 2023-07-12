@@ -36,10 +36,14 @@ pub struct ReleaseState {
 pub struct Release {
     pub state: Option<ReleaseState>,
     pub confdir: PathBuf,
+    pub ws: Workspace,
 }
 
 impl Release {
-    pub fn open(ws: &Workspace) -> Result<Release, ()> {
+    /// Opens a release in a given workspace, taking ownership of the associated
+    /// workspace. A release state may or may not exist.
+    ///
+    pub fn open(ws: Workspace) -> Result<Release, ()> {
         let configdir = ws.get_config_dir();
         if !configdir.exists() {
             log::error!("Error opening config dir at '{}'", configdir.display());
@@ -49,6 +53,7 @@ impl Release {
         let mut state = Release {
             state: None,
             confdir: configdir.to_path_buf(),
+            ws,
         };
         let statefile = configdir.join("release.json");
         if statefile.exists() {
