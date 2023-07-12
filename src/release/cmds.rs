@@ -18,6 +18,8 @@ pub enum Cmds {
     Info,
     /// List releases.
     List,
+    /// Release status.
+    Status,
     /// Initiate a release.
     Init(InitCommand),
 }
@@ -76,6 +78,10 @@ pub fn handle_cmds(cmd: &Cmds) {
     match cmd {
         Cmds::Info => {
             log::debug!("Obtain workspace release info");
+        }
+        Cmds::Status => {
+            log::debug!("Obtain release status");
+            release.status();
         }
         Cmds::List => {
             log::error!("Should not have reached here!");
