@@ -61,4 +61,9 @@ impl Workspace {
             repos,
         })
     }
+
+    /// Obtain config directory for this workspace
+    pub fn get_config_dir(self: &Self) -> PathBuf {
+        self.path.clone().join(".arc")
+    }
 }

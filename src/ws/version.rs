@@ -14,7 +14,7 @@
 
 use std::fmt::Display;
 
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct Version {
     pub version: String,
     pub major: u64,

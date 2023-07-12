@@ -12,7 +12,110 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod cmds;
-mod list;
+use std::path::PathBuf;
 
-pub struct Release {}
+use crate::ws::{version::Version, workspace::Workspace};
+
+pub mod cmds;
+mod init;
+mod list;
+mod status;
+
+#[derive(Debug, Copy, Clone)]
+pub enum ReleaseError {
+    UserAborted,
+    InitError,
+    AlreadyInit,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct ReleaseState {
+    pub release_version: Version,
+}
+
+pub struct Release {
+    pub state: Option<ReleaseState>,
+    pub confdir: PathBuf,
+}
+
+impl Release {
+    pub fn open(ws: &Workspace) -> Result<Release, ()> {
+        let configdir = ws.get_config_dir();
+        if !configdir.exists() {
+            log::error!("Error opening config dir at '{}'", configdir.display());
+            return Err(());
+        }
+
+        let mut state = Release {
+            state: None,
+            confdir: configdir.to_path_buf(),
+        };
+        let statefile = configdir.join("release.json");
+        if statefile.exists() {
+            let f = match std::fs::File::open(&statefile) {
+                Ok(v) => v,
+                Err(_) => {
+                    log::error!("Error opening state file at '{}'", &statefile.display());
+                    return Err(());
+                }
+            };
+            state.state = match serde_json::from_reader(f) {
+                Ok(v) => v,
+                Err(e) => {
+                    log::error!("Error reading state from '{}': {}", statefile.display(), e);
+                    return Err(());
+                }
+            }
+        }
+        Ok(state)
+    }
+
+    pub fn write(self: &Self) -> Result<(), ()> {
+        assert!(self.confdir.exists());
+
+        let state = match &self.state {
+            None => {
+                log::debug!("No state to write to file!");
+                return Ok(());
+            }
+            Some(v) => v,
+        };
+
+        let statefile = self.confdir.join("release.json");
+        let f = match std::fs::File::options()
+            .create(true)
+            .truncate(true)
+            .write(true)
+            .open(&statefile)
+        {
+            Ok(v) => v,
+            Err(e) => {
+                log::error!(
+                    "Error opening state file at '{}' for writing: {}",
+                    &statefile.display(),
+                    e
+                );
+                return Err(());
+            }
+        };
+        match serde_json::to_writer(f, &state) {
+            Ok(_) => {
+                log::debug!("State written to '{}'", statefile.display());
+            }
+            Err(e) => {
+                log::error!("Error writting state to '{}': {}", &statefile.display(), e);
+                return Err(());
+            }
+        };
+
+        Ok(())
+    }
+
+    pub fn get_version(self: &Self) -> String {
+        if let Some(state) = &self.state {
+            state.release_version.get_version_str()
+        } else {
+            String::from("unknown version")
+        }
+    }
+}

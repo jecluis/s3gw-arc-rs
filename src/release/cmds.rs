@@ -18,6 +18,14 @@ pub enum Cmds {
     Info,
     /// List releases.
     List,
+    /// Initiate a release.
+    Init(InitCommand),
+}
+
+#[derive(clap::Args)]
+pub struct InitCommand {
+    #[arg(value_name = "VERSION", short, long)]
+    release: Option<String>,
 }
 
 pub fn handle_cmds(cmd: &Cmds) {
@@ -37,12 +45,45 @@ pub fn handle_cmds(cmd: &Cmds) {
     };
 
     match cmd {
+        Cmds::List => {
+            log::debug!("List existing releases");
+            crate::release::Release::list(&ws);
+            return;
+        }
+        Cmds::Init(cmd) => {
+            log::debug!("Init release");
+            match crate::release::Release::init(&ws, &cmd.release) {
+                Ok(release) => {
+                    println!("Release {} init'ed.", release.get_version());
+                }
+                Err(e) => {
+                    log::error!("Error init'ing release: {:?}", e);
+                }
+            };
+            return;
+        }
+        _ => {}
+    };
+
+    let release = match crate::release::Release::open(&ws) {
+        Ok(r) => r,
+        Err(_) => {
+            log::error!("Unable to open workspace release config!");
+            return;
+        }
+    };
+
+    match cmd {
         Cmds::Info => {
             log::debug!("Obtain workspace release info");
         }
         Cmds::List => {
-            log::debug!("List existing releases");
-            crate::release::Release::list(&ws);
+            log::error!("Should not have reached here!");
+            return;
+        }
+        Cmds::Init(_) => {
+            log::error!("Should not have reached here!");
+            return;
         }
     };
 }
