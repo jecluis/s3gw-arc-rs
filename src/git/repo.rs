@@ -172,32 +172,60 @@ impl GitRepo {
         }
     }
 
-    fn _open_remote(self: &Self, name: &str) -> Result<git2::Remote, ()> {
-        let mut remote = match self.repo.find_remote(name) {
-            Ok(r) => r,
+    fn _get_remote(self: &Self, name: &str) -> Result<git2::Remote, ()> {
+        match self.repo.find_remote(name) {
+            Ok(r) => Ok(r),
             Err(e) => {
                 log::error!("Unable to find remote '{}': {}", name, e);
                 return Err(());
             }
+        }
+    }
+
+    fn _open_remote<'a, 'b>(
+        self: &'a Self,
+        remote: &'b mut git2::Remote<'a>,
+        direction: git2::Direction,
+        with_auth: bool,
+    ) -> Result<git2::RemoteConnection<'a, 'b, '_>, ()> {
+        let cbs: Option<git2::RemoteCallbacks> = if with_auth {
+            let mut cbs = git2::RemoteCallbacks::new();
+            cbs.credentials(|url, user, allowed_types| {
+                let username = user.unwrap();
+                log::debug!(
+                    "auth url: {}, username: {}, allowed_types: {:?}",
+                    url,
+                    username,
+                    allowed_types
+                );
+                git2::Cred::ssh_key_from_agent(username)
+            });
+            Some(cbs)
+        } else {
+            None
         };
-        match remote.connect(git2::Direction::Fetch) {
-            Ok(_) => {}
+
+        let conn = match remote.connect_auth(direction, cbs, None) {
+            Ok(v) => v,
             Err(e) => {
-                log::error!("Unable to connect to remote '{}': {}", name, e);
+                log::error!("Unable to connect to remote: {}", e);
                 return Err(());
             }
         };
-        Ok(remote)
+
+        Ok(conn)
     }
 
-    fn _remote_update(self: &Self, name: &str) -> Result<(), ()> {
-        let mut remote = match self._open_remote(name) {
+    fn _remote_update(self: &Self, name: &str, auth: bool) -> Result<(), ()> {
+        let mut remote = self._get_remote(name).unwrap();
+        let mut conn = match self._open_remote(&mut remote, git2::Direction::Fetch, auth) {
             Ok(v) => v,
             Err(_) => {
                 log::error!("Unable to open remote '{}'", name);
                 return Err(());
             }
         };
+        let remote = conn.remote();
         log::info!("Updating remote '{}'", name);
         let x: [&str; 0] = [];
         match remote.fetch(&x, None, None) {
@@ -212,17 +240,25 @@ impl GitRepo {
     }
 
     pub fn remote_update(self: &Self) -> Result<(), ()> {
-        self._remote_update("ro")
+        match self._remote_update("ro", false) {
+            Ok(()) => {}
+            Err(()) => {
+                return Err(());
+            }
+        };
+        self._remote_update("rw", true)
     }
 
     pub fn get_refs(self: &Self) -> Result<super::refs::GitRefs, ()> {
-        let remote = match self._open_remote("ro") {
+        let mut remote = self._get_remote("ro").unwrap();
+        let mut conn = match self._open_remote(&mut remote, git2::Direction::Fetch, false) {
             Ok(v) => v,
             Err(_) => {
                 log::error!("Unable to open remote to obtain refs!");
                 return Err(());
             }
         };
+        let remote = conn.remote();
         let refs = match super::refs::GitRefs::from_remote(&remote) {
             Ok(v) => v,
             Err(_) => {
