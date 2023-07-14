@@ -123,8 +123,19 @@ impl Version {
         self.major * 10_u64.pow(9) + self.minor * 10_u64.pow(6) + patch * 10_u64.pow(3) + rc
     }
 
-    pub fn get_release_version_str(self: &Self) -> String {
-        format!("{}.{}", self.major, self.minor)
+    pub fn get_base_version_str(self: &Self) -> String {
+        self.get_base_version().get_version_str()
+    }
+
+    /// Base version is the vX.Y format umbrella version for a given release.
+    ///
+    pub fn get_base_version(self: &Self) -> Version {
+        Version {
+            major: self.major,
+            minor: self.minor,
+            patch: None,
+            rc: None,
+        }
     }
 
     pub fn get_version_str(self: &Self) -> String {
@@ -139,7 +150,10 @@ impl Version {
         format!("{}.{}{}{}", self.major, self.minor, p, rc,)
     }
 
-    pub fn get_base_version(self: &Self) -> Version {
+    /// Release version is the vX.Y.Z umbrella version for any number of release
+    /// candidate versions and a given final release version.
+    ///
+    pub fn get_release_version(self: &Self) -> Version {
         assert!(self.patch.is_some());
         Version {
             major: self.major,

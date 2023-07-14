@@ -41,7 +41,7 @@ impl Release {
         };
 
         for release in &versions {
-            let relver = release.release_version.get_release_version_str();
+            let relver = release.release_version.get_base_version_str();
             if !versions_per_release.contains_key(&relver) {
                 versions_per_release.insert(relver.clone(), vec![]);
             }
@@ -107,7 +107,7 @@ impl Release {
                     release_versions.push(release_ver.clone());
                 }
 
-                let relver = release_ver.get_release_version_str();
+                let relver = release_ver.get_base_version_str();
                 assert!(repo_release_versions
                     .versions_per_release
                     .contains_key(&relver));
@@ -146,7 +146,7 @@ impl Release {
         for relver in release_versions {
             let mut rel_rows: Vec<Vec<String>> = vec![];
 
-            let relver_str = relver.get_release_version_str();
+            let relver_str = relver.get_base_version_str();
             let mut rel_version_entries = versions_per_release.get(&relver_str).unwrap().clone();
             rel_version_entries.sort_by_key(|e: &Version| e.get_version_id());
 

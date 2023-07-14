@@ -46,11 +46,11 @@ impl Release {
             }
         };
 
-        let relversion_str = state.release_version.get_release_version_str();
-        let relversions = match release_versions.versions_per_release.get(&relversion_str) {
+        let base_version_str = state.release_version.get_base_version_str();
+        let base_versions = match release_versions.versions_per_release.get(&base_version_str) {
             Some(v) => v,
             None => {
-                println!("Release version {} not started.", relversion_str);
+                println!("Release version {} not started.", base_version_str);
                 return;
             }
         };
@@ -62,23 +62,23 @@ impl Release {
         }
 
         let mut versions_tree: BTreeMap<u64, VersionDesc> = BTreeMap::new();
-        for v in relversions {
-            let base_version = v.get_base_version();
-            let base_version_id = base_version.get_version_id();
-            if !versions_tree.contains_key(&base_version_id) {
+        for v in base_versions {
+            let rel_version = v.get_release_version();
+            let rel_version_id = rel_version.get_version_id();
+            if !versions_tree.contains_key(&rel_version_id) {
                 versions_tree.insert(
-                    base_version_id,
+                    rel_version_id,
                     VersionDesc {
-                        version: base_version,
+                        version: rel_version,
                         rcs: vec![],
                         is_complete: false,
                     },
                 );
             }
-            let desc = versions_tree.get_mut(&base_version_id).unwrap();
+            let desc = versions_tree.get_mut(&rel_version_id).unwrap();
             desc.rcs.push(v.clone());
 
-            if v.get_version_id() == base_version_id {
+            if v.get_version_id() == rel_version_id {
                 desc.is_complete = true;
             }
         }

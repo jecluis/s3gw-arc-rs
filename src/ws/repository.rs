@@ -229,7 +229,7 @@ impl Repository {
                     }
                 };
 
-                let relversion_str = version.get_release_version_str();
+                let relversion_str = version.get_base_version_str();
                 if !versions.contains_key(&relversion_str) {
                     log::trace!(
                         "Unable to find release '{}' for version '{}'",
