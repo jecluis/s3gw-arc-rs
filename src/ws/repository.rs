@@ -12,11 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::{BTreeMap, HashMap},
+    path::PathBuf,
+};
 
 use crate::git;
 
-use super::config::{WSGitRepoConfigValues, WSGitReposConfig, WSUserConfig};
+use super::{
+    config::{WSGitRepoConfigValues, WSGitReposConfig, WSUserConfig},
+    version::Version,
+};
 
 pub struct Repository {
     pub name: String,
@@ -264,5 +270,263 @@ impl Repository {
         res.sort_by_key(|e: &super::version::ReleaseVersion| e.release_version.get_version_id());
 
         Ok(res)
+    }
+
+    pub fn get_version_tree(self: &Self) -> Result<BTreeMap<u64, super::version::BaseVersion>, ()> {
+        let branch_re = regex::Regex::new(&self.config.branch_pattern).expect(
+            format!(
+                "potentially malformed branch pattern '{}'",
+                self.config.branch_pattern
+            )
+            .as_str(),
+        );
+        let tag_re = regex::Regex::new(&self.config.tag_pattern).expect(
+            format!(
+                "potentially malformed tag pattern '{}'",
+                self.config.tag_pattern
+            )
+            .as_str(),
+        );
+
+        let git = match git::repo::GitRepo::open(&self.path) {
+            Ok(v) => v,
+            Err(()) => {
+                log::error!("Unable to open git repository at '{}'", self.path.display());
+                return Err(());
+            }
+        };
+        let refs = match git.get_refs() {
+            Ok(v) => v,
+            Err(()) => {
+                log::error!(
+                    "Unable to obtain refs for repository at '{}'",
+                    self.path.display()
+                );
+                return Err(());
+            }
+        };
+
+        let mut version_tree: BTreeMap<u64, super::version::BaseVersion> = BTreeMap::new();
+
+        for branch in refs.branches {
+            log::trace!("branch '{}' oid {}", branch.name, branch.oid);
+            if let Some(m) = branch_re.captures(&branch.name) {
+                assert_eq!(m.len(), 2);
+
+                let version = if let Some(v) = m.get(1) {
+                    super::version::Version::from_str(&String::from(v.as_str())).unwrap()
+                } else {
+                    log::trace!("  not a match - skip.");
+                    continue;
+                };
+                let verid = version.get_version_id();
+                assert!(!version_tree.contains_key(&verid));
+                version_tree.insert(
+                    verid,
+                    crate::ws::version::BaseVersion {
+                        version,
+                        releases: BTreeMap::new(),
+                    },
+                );
+            }
+        }
+
+        for tag in refs.tags {
+            log::trace!("tag '{}' oid {}", tag.name, tag.oid);
+            if let Some(m) = tag_re.captures(&tag.name) {
+                assert_eq!(m.len(), 2);
+
+                let version = if let Some(v) = m.get(1) {
+                    match super::version::Version::from_str(&String::from(v.as_str())) {
+                        Ok(ver) => ver,
+                        Err(()) => {
+                            log::debug!("unable to parse version '{}' - skip.", v.as_str());
+                            continue;
+                        }
+                    }
+                } else {
+                    continue;
+                };
+
+                let base_ver = version.get_base_version();
+                let base_ver_id = base_ver.get_version_id();
+                if !version_tree.contains_key(&base_ver_id) {
+                    log::trace!(
+                        "base version {} for {} not found - skip.",
+                        base_ver,
+                        version
+                    );
+                    continue;
+                }
+
+                let base_version = version_tree.get_mut(&base_ver_id).unwrap();
+                let release_ver = version.get_release_version();
+                let release_ver_id = release_ver.get_version_id();
+                if !base_version.releases.contains_key(&release_ver_id) {
+                    base_version.releases.insert(
+                        release_ver_id,
+                        crate::ws::version::ReleaseDesc {
+                            release: release_ver.clone(),
+                            versions: BTreeMap::new(),
+                            is_complete: false,
+                        },
+                    );
+                }
+
+                let version_desc_tree = base_version.releases.get_mut(&release_ver_id).unwrap();
+                let version_id = version.get_version_id();
+                if version.rc.is_none() {
+                    version_desc_tree.is_complete = true;
+                }
+                version_desc_tree.versions.insert(version_id, version);
+            }
+        }
+
+        Ok(version_tree)
+    }
+
+    fn get_versions_from_refs(
+        self: &Self,
+        refs: &Vec<crate::git::refs::GitRefEntry>,
+        regex_pattern: &String,
+    ) -> Result<BTreeMap<u64, Version>, ()> {
+        let regex = match regex::Regex::new(&regex_pattern) {
+            Ok(r) => r,
+            Err(e) => {
+                log::error!("potentially malformed pattern '{}': {}", regex_pattern, e);
+                return Err(());
+            }
+        };
+
+        let mut versions: BTreeMap<u64, Version> = BTreeMap::new();
+        for entry in refs {
+            log::trace!(
+                "get_versions_from_refs: process '{}' (oid {})",
+                entry.name,
+                entry.oid
+            );
+            if let Some(m) = regex.captures(&entry.name) {
+                assert_eq!(m.len(), 2);
+
+                let version = if let Some(v) = m.get(1) {
+                    match Version::from_str(&String::from(v.as_str())) {
+                        Ok(r) => r,
+                        Err(()) => {
+                            log::trace!("malformed version '{}' - skip.", v.as_str());
+                            continue;
+                        }
+                    }
+                } else {
+                    log::trace!("  not a match - skip.");
+                    continue;
+                };
+                let version_id = version.get_version_id();
+                assert!(!versions.contains_key(&version_id));
+                versions.insert(version_id, version);
+            }
+        }
+
+        Ok(versions)
+    }
+
+    fn get_git_refs(self: &Self) -> Result<crate::git::refs::GitRefs, ()> {
+        let git = match git::repo::GitRepo::open(&self.path) {
+            Ok(v) => v,
+            Err(()) => {
+                log::error!("unable to open git repository at '{}'", self.path.display());
+                return Err(());
+            }
+        };
+        git.get_refs()
+    }
+
+    pub fn get_versions(self: &Self) -> Result<BTreeMap<u64, Version>, ()> {
+        let refs = match self.get_git_refs() {
+            Ok(v) => v,
+            Err(()) => {
+                log::error!(
+                    "unable to obtain refs for repository at '{}'",
+                    self.path.display()
+                );
+                return Err(());
+            }
+        };
+
+        match self.get_versions_from_refs(&refs.tags, &self.config.tag_pattern) {
+            Ok(v) => Ok(v),
+            Err(()) => {
+                log::error!(
+                    "unable to obtain versions from refs from repository at '{}'",
+                    self.path.display()
+                );
+                return Err(());
+            }
+        }
+    }
+
+    pub fn get_release_branches(self: &Self) -> Result<BTreeMap<u64, Version>, ()> {
+        let refs = match self.get_git_refs() {
+            Ok(v) => v,
+            Err(()) => {
+                log::error!(
+                    "unable to obtain refs for repository '{}'",
+                    self.path.display()
+                );
+                return Err(());
+            }
+        };
+
+        match self.get_versions_from_refs(&refs.branches, &self.config.branch_pattern) {
+            Ok(v) => Ok(v),
+            Err(()) => {
+                log::error!(
+                    "unable to obtain branches from refs from repository at '{}'",
+                    self.path.display()
+                );
+                return Err(());
+            }
+        }
+    }
+
+    pub fn find_version(self: &Self, version: &super::version::Version) -> Result<(), ()> {
+        let ver_id = version.get_version_id();
+        let base_ver = version.get_base_version();
+        let base_ver_id = base_ver.get_version_id();
+
+        log::trace!(
+            "find version {} (id {}), base {} (id {})",
+            version,
+            ver_id,
+            base_ver,
+            base_ver_id
+        );
+
+        let versions = match self.get_versions() {
+            Ok(v) => v,
+            Err(()) => {
+                log::error!("unable to obtain versions!");
+                return Err(());
+            }
+        };
+
+        match versions.get(&ver_id) {
+            Some(_) => Ok(()),
+            None => Err(()),
+        }
+    }
+
+    pub fn test_ssh(self: &Self) {
+        let git = match git::repo::GitRepo::open(&self.path) {
+            Ok(v) => v,
+            Err(()) => {
+                log::error!(
+                    "Unable to open git repository at '{}' to test ssh!",
+                    self.path.display()
+                );
+                return;
+            }
+        };
+
+        git.test_ssh();
     }
 }

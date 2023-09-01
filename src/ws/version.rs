@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Display;
+use std::{collections::BTreeMap, fmt::Display};
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct Version {
@@ -25,6 +25,17 @@ pub struct Version {
 pub struct ReleaseVersion {
     pub release_version: Version,
     pub versions: Vec<Version>,
+}
+
+pub struct ReleaseDesc {
+    pub release: Version,
+    pub versions: BTreeMap<u64, Version>,
+    pub is_complete: bool,
+}
+
+pub struct BaseVersion {
+    pub version: Version,
+    pub releases: BTreeMap<u64, ReleaseDesc>,
 }
 
 impl PartialEq for Version {
@@ -161,5 +172,27 @@ impl Version {
             patch: self.patch,
             rc: None,
         }
+    }
+
+    pub fn min(self: &Self) -> Version {
+        let mut v = self.clone();
+        if v.patch.is_none() {
+            v.patch = Some(0);
+        }
+        if v.rc.is_none() {
+            v.rc = Some(0);
+        }
+        v
+    }
+
+    pub fn max(self: &Self) -> Version {
+        let mut v = self.clone();
+        if v.patch.is_none() {
+            v.patch = Some(999);
+        }
+        if v.rc.is_none() {
+            v.rc = Some(999);
+        }
+        v
     }
 }

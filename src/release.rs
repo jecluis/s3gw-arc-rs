@@ -19,6 +19,7 @@ use crate::ws::{version::Version, workspace::Workspace};
 pub mod cmds;
 mod init;
 mod list;
+mod start;
 mod status;
 
 #[derive(Debug, Copy, Clone)]

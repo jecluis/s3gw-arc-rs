@@ -22,12 +22,21 @@ pub enum Cmds {
     Status,
     /// Initiate a release.
     Init(InitCommand),
+    /// Start a new release process.
+    Start(StartCommand),
 }
 
 #[derive(clap::Args)]
 pub struct InitCommand {
     #[arg(value_name = "VERSION", short, long)]
     release: Option<String>,
+}
+
+#[derive(clap::Args)]
+pub struct StartCommand {
+    /// Version to start a new release process for (e.g., 0.17.1)
+    #[arg(value_name = "VERSION")]
+    version: String,
 }
 
 pub fn handle_cmds(cmd: &Cmds) {
@@ -82,6 +91,27 @@ pub fn handle_cmds(cmd: &Cmds) {
         Cmds::Status => {
             log::debug!("Obtain release status");
             release.status();
+        }
+        Cmds::Start(start_cmd) => {
+            log::debug!(
+                "Start a new release process for version {}",
+                start_cmd.version
+            );
+            let version = match crate::ws::version::Version::from_str(&start_cmd.version) {
+                Ok(v) => v,
+                Err(_) => {
+                    log::error!("Error parsing provided version!");
+                    return;
+                }
+            };
+            match release.start(&version) {
+                Ok(()) => {
+                    println!("Release for version {} successfully started!", &version);
+                }
+                Err(()) => {
+                    println!("Error starting new release!");
+                }
+            };
         }
         Cmds::List => {
             log::error!("Should not have reached here!");

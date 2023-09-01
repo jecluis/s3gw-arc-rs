@@ -144,6 +144,148 @@ impl GitRepo {
         cfg.set_bool("commit.gpgSign", true).unwrap();
         self
     }
+
+    // pub fn _get_refs(self: &Self) -> Result<(), ()> {
+    //     let branches = match self.repo.branches(None) {
+    //         Ok(v) => v,
+    //         Err(e) => {
+    //             log::error!(
+    //                 "Error obtaining repository {} branches: {}",
+    //                 self.path.display(),
+    //                 e
+    //             );
+    //             return Err(());
+    //         }
+    //     };
+
+    //     for entry in branches {
+    //         if let Err(e) = entry {
+    //             log::error!("Error listing branches: {}", e);
+    //             return Err(());
+    //         }
+    //         let (branch, branch_type) = entry.unwrap();
+    //         log::debug!(
+    //             "branch '{}' type '{}'",
+    //             branch.name().unwrap().unwrap(),
+    //             match branch_type {
+    //                 git2::BranchType::Local => "local",
+    //                 git2::BranchType::Remote => "remote",
+    //             }
+    //         );
+    //     }
+
+    //     log::debug!("Obtaining tags...");
+    //     match self.repo.tag_names(None /*Some("s3gw-*")*/) {
+    //         Ok(t) => {
+    //             for tag in t.iter() {
+    //                 log::debug!("tag found: {}", tag.unwrap());
+    //             }
+    //         }
+    //         Err(e) => {
+    //             log::error!("Error obtaining tags: {}", e);
+    //         }
+    //     };
+
+    //     let mut ro = self.repo.find_remote("ro").unwrap();
+    //     ro.connect(git2::Direction::Fetch)
+    //         .expect("Unable to connect to remote");
+
+    //     log::debug!("List repository...");
+    //     let rols = ro.list().unwrap();
+    //     for head in rols {
+    //         let tgt = head.symref_target().unwrap_or("N/A");
+    //         let oid = head.oid();
+    //         let mut kind = "N/A";
+    //         if let Ok(obj) = self.repo.find_object(oid, None) {
+    //             kind = match obj
+    //                 .kind()
+    //                 .expect(format!("Unable to obtain kind for oid {}", oid).as_str())
+    //             {
+    //                 git2::ObjectType::Any => "any",
+    //                 git2::ObjectType::Blob => "blob",
+    //                 git2::ObjectType::Commit => "commit",
+    //                 git2::ObjectType::Tag => "tag",
+    //                 git2::ObjectType::Tree => "tree",
+    //             };
+    //         }
+
+    //         log::debug!(
+    //             "head: {}, local: {}, target: {}, oid: {}, kind: {}",
+    //             head.name(),
+    //             head.is_local(),
+    //             tgt,
+    //             oid,
+    //             kind
+    //         );
+    //     }
+
+    //     log::debug!("default branch: {}", self.get_default_branch());
+
+    //     let branches_and_tags = GitRefs::from_remote(&ro).unwrap();
+    //     for entry in branches_and_tags.branches {
+    //         log::debug!("branch: {}, oid: {}", entry.name, entry.oid);
+    //     }
+    //     for entry in branches_and_tags.tags {
+    //         log::debug!("tag: {}, oid: {}", entry.name, entry.oid);
+    //     }
+
+    //     self._remote_update("ro").expect("Unable to update remote");
+    //     let v0180rc1_oid = git2::Oid::from_str("dc657a48600c7a87084252481740463e40faedff")
+    //         .expect("Unable to get oid for v0.18.0-rc1");
+    //     let v0180rc2_oid = git2::Oid::from_str("18f99637b7c10dfca7575244e2d649dd45610f04")
+    //         .expect("Unable to get oid for v0.18.0-rc2");
+    //     let (ahead, behind) = self
+    //         .get_graph_diff(v0180rc1_oid, v0180rc2_oid)
+    //         .expect("Error getting graph diff");
+    //     log::debug!("ahead: {}, behind: {}", ahead, behind);
+
+    //     log::debug!("List remote refspecs...");
+    //     for refspec in ro.refspecs() {
+    //         log::debug!(
+    //             "src: {}, dst: {}",
+    //             refspec.src().unwrap(),
+    //             refspec.dst().unwrap()
+    //         );
+    //     }
+
+    //     log::debug!("List fetched refspecs...");
+    //     let refspecs = ro.fetch_refspecs().expect("Unable to obtain refspecs!");
+    //     for refspec in refspecs.iter() {
+    //         log::debug!("{}", refspec.unwrap());
+    //     }
+
+    //     log::debug!("Obtaining references...");
+    //     let mut default_branch: Option<String> = None;
+    //     for entry in self.repo.references().unwrap() {
+    //         let refentry = entry.unwrap();
+    //         let refname = refentry.name().unwrap();
+    //         if refentry.is_branch() {
+    //             log::debug!("ref branch: {}", refname);
+    //         } else if refentry.is_tag() {
+    //             log::debug!("ref tag: {}", refname);
+    //         } else if refentry.is_remote() {
+    //             log::debug!("ref remote: {}", refname);
+    //             if refname == "refs/remotes/ro/HEAD" {
+    //                 if let Some(tgt) = refentry.symbolic_target() {
+    //                     default_branch = Some(String::from(tgt));
+    //                     break;
+    //                 }
+    //             }
+    //         } else {
+    //             log::debug!("something else: {}", refname);
+    //         }
+    //         if let Some(tgt) = refentry.symbolic_target() {
+    //             log::debug!("  symbolic target: {}", tgt);
+    //         }
+    //     }
+    //     if let Some(def) = default_branch {
+    //         let oid = self.repo.refname_to_id(def.as_str()).unwrap();
+    //         log::debug!("Default branch: {} ({})", def, oid);
+    //     }
+
+    //     Ok(())
+    // }
+
     pub fn get_default_branch(self: &Self) -> String {
         let head_ref = self
             .repo
@@ -268,5 +410,31 @@ impl GitRepo {
         };
 
         Ok(refs)
+    }
+
+    pub fn test_ssh(self: &Self) {
+        let mut remote = self._get_remote("rw").unwrap();
+        let mut conn = match self._open_remote(&mut remote, git2::Direction::Fetch, true) {
+            Ok(v) => v,
+            Err(()) => {
+                log::error!("Unable to open remote to test ssh!");
+                return;
+            }
+        };
+        let remote = conn.remote();
+        let x: [&str; 0] = [];
+        match remote.fetch(&x, None, None) {
+            Ok(_) => {
+                log::debug!("Fetched!");
+            }
+            Err(e) => {
+                log::error!("Error fetching: {}", e);
+            }
+        };
+
+        log::debug!(
+            "defaul branch: {}",
+            remote.default_branch().unwrap().as_str().unwrap()
+        );
     }
 }
