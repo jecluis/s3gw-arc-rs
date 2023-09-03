@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::path::PathBuf;
+
 #[derive(clap::Subcommand)]
 pub enum Cmds {
     /// Obtain release information.
@@ -37,6 +39,10 @@ pub struct StartCommand {
     /// Version to start a new release process for (e.g., 0.17.1)
     #[arg(value_name = "VERSION")]
     version: String,
+
+    /// Release notes
+    #[arg(value_name = "FILE", short, long)]
+    notes: PathBuf,
 }
 
 pub fn handle_cmds(cmd: &Cmds) {
@@ -76,7 +82,7 @@ pub fn handle_cmds(cmd: &Cmds) {
         _ => {}
     };
 
-    let release = match crate::release::Release::open(ws) {
+    let mut release = match crate::release::Release::open(ws) {
         Ok(r) => r,
         Err(_) => {
             log::error!("Unable to open workspace release config!");
@@ -104,7 +110,29 @@ pub fn handle_cmds(cmd: &Cmds) {
                     return;
                 }
             };
-            match release.start(&version) {
+
+            if !start_cmd.notes.exists() {
+                log::error!(
+                    "Release Notes file at {} does not exist!",
+                    start_cmd.notes.display()
+                );
+                return;
+            } else {
+                match start_cmd.notes.extension() {
+                    Some(ext) => {
+                        if ext.to_ascii_lowercase() != "md" {
+                            log::error!("Provided Release Notes file is not a Markdown file!");
+                            return;
+                        }
+                    }
+                    None => {
+                        log::error!("Provided Release Notes file is not a Markdown file!");
+                        return;
+                    }
+                };
+            }
+
+            match release.start(&version, &start_cmd.notes) {
                 Ok(()) => {
                     println!("Release for version {} successfully started!", &version);
                 }

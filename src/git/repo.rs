@@ -33,7 +33,7 @@ impl GitRepo {
         mut progress_cb: F,
     ) -> Result<GitRepo, ()>
     where
-        F: FnMut(u64, u64),
+        F: FnMut(u64, u64, u64, u64, u64),
     {
         if path.exists() {
             log::error!("Directory exists at {}, can't clone.", path.display());
@@ -44,7 +44,10 @@ impl GitRepo {
         cbs.transfer_progress(|progress: git2::Progress| {
             progress_cb(
                 progress.received_objects() as u64,
+                progress.indexed_objects() as u64,
                 progress.total_objects() as u64,
+                progress.indexed_deltas() as u64,
+                progress.total_deltas() as u64,
             );
             true
         });
@@ -334,7 +337,7 @@ impl GitRepo {
             let mut cbs = git2::RemoteCallbacks::new();
             cbs.credentials(|url, user, allowed_types| {
                 let username = user.unwrap();
-                log::debug!(
+                log::trace!(
                     "auth url: {}, username: {}, allowed_types: {:?}",
                     url,
                     username,
@@ -436,5 +439,35 @@ impl GitRepo {
             "defaul branch: {}",
             remote.default_branch().unwrap().as_str().unwrap()
         );
+    }
+
+    pub fn branch_from_default(self: &Self, dst: &String) -> Result<(), ()> {
+        let head_ref = self.repo.find_reference("refs/remotes/ro/HEAD").unwrap();
+        let head_name = head_ref.symbolic_target().unwrap();
+        let head_commit = head_ref.peel_to_commit().unwrap();
+
+        log::debug!(
+            "branch to: {}, head: name = {}, commit: {}",
+            dst,
+            head_name,
+            head_commit.id()
+        );
+
+        match self.repo.branch(&dst, &head_commit, false) {
+            Ok(_) => Ok(()),
+            Err(_) => {
+                log::error!(
+                    "Unable to branch off '{}' ({}) to '{}'",
+                    head_name,
+                    head_commit.id(),
+                    dst
+                );
+                return Err(());
+            }
+        }
+    }
+
+    pub fn tmp_get_refs(self: &Self) {
+        super::refs::GitRefs::from_local(&self.repo).unwrap();
     }
 }

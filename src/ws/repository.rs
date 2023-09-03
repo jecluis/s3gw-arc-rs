@@ -66,7 +66,7 @@ impl Repos {
             &"s3gw-charts".into(),
             &base_path.join("charts.git"),
             &user_config,
-            &git_config.s3gw,
+            &git_config.charts,
         ) {
             Ok(v) => v,
             Err(_) => return Err(()),
@@ -75,7 +75,7 @@ impl Repos {
             &"s3gw-ceph".into(),
             &base_path.join("ceph.git"),
             &user_config,
-            &git_config.s3gw,
+            &git_config.ceph,
         ) {
             Ok(v) => v,
             Err(_) => return Err(()),
@@ -115,7 +115,7 @@ impl Repository {
     ///
     pub fn sync<T>(self: &Self, mut progress_cb: T) -> Result<(), ()>
     where
-        T: FnMut(&str, u64, u64),
+        T: FnMut(&str, u64, u64, u64, u64, u64),
     {
         if !self.path.exists() {
             // clone repository
@@ -123,8 +123,19 @@ impl Repository {
                 &self.path,
                 &self.config.readonly,
                 &self.config.readwrite,
-                |n: u64, total: u64| {
-                    progress_cb("clone", n, total);
+                |objs_recvd: u64,
+                 objs_indexed: u64,
+                 objs_total: u64,
+                 deltas_indexed: u64,
+                 deltas_total: u64| {
+                    progress_cb(
+                        "clone",
+                        objs_recvd,
+                        objs_indexed,
+                        objs_total,
+                        deltas_indexed,
+                        deltas_total,
+                    );
                 },
             ) {
                 Ok(v) => v,
@@ -385,6 +396,33 @@ impl Repository {
         Ok(version_tree)
     }
 
+    pub fn print_version_tree(self: &Self) {
+        let tree = match self.get_version_tree() {
+            Ok(t) => t,
+            Err(()) => {
+                log::error!("Unable to print version tree for '{}'", self.name);
+                return;
+            }
+        };
+
+        for base_version in tree.values() {
+            println!("v{}", base_version.version);
+            for release_desc in base_version.releases.values() {
+                println!(
+                    "  - v{} ({})",
+                    release_desc.release,
+                    match release_desc.is_complete {
+                        true => "complete",
+                        false => "incomplete",
+                    }
+                );
+                for version in release_desc.versions.values() {
+                    println!("    - v{}", version);
+                }
+            }
+        }
+    }
+
     fn get_versions_from_refs(
         self: &Self,
         refs: &Vec<crate::git::refs::GitRefEntry>,
@@ -438,6 +476,17 @@ impl Repository {
             }
         };
         git.get_refs()
+    }
+
+    pub fn tmp_get_refs(self: &Self) {
+        let git = match git::repo::GitRepo::open(&self.path) {
+            Ok(v) => v,
+            Err(()) => {
+                log::error!("Unable to open git repository at '{}'", self.path.display());
+                return;
+            }
+        };
+        git.tmp_get_refs();
     }
 
     pub fn get_versions(self: &Self) -> Result<BTreeMap<u64, Version>, ()> {
@@ -528,5 +577,28 @@ impl Repository {
         };
 
         git.test_ssh();
+    }
+
+    pub fn branch_from_default(self: &Self, dst: &Version) -> Result<(), ()> {
+        let git = match git::repo::GitRepo::open(&self.path) {
+            Ok(v) => v,
+            Err(()) => {
+                log::error!("Unable to open git repository at '{}'", self.path.display());
+                return Err(());
+            }
+        };
+
+        let dst_branch = dst.to_str_fmt(&self.config.branch_format);
+        match git.branch_from_default(&dst_branch) {
+            Ok(()) => {
+                log::info!("success!");
+            }
+            Err(()) => {
+                log::error!("error!");
+                return Err(());
+            }
+        }
+
+        Ok(())
     }
 }

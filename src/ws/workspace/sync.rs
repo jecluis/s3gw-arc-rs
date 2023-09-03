@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use indicatif::{ProgressBar, ProgressStyle};
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 
 use super::Workspace;
 
@@ -29,11 +29,13 @@ impl Workspace {
         ];
 
         for repo in repos {
-            let bar = ProgressBar::new(0);
-            bar.set_style(
+            let bars = MultiProgress::new();
+            let main = ProgressBar::new(0);
+            main.set_style(
                 ProgressStyle::with_template(
                     format!(
-                        "{:12} [{{elapsed_precise}}] {{bar:40.cyan/blue}} {{percent}}% {{pos:>7}}/{{len:7}} {{msg}}",
+                        "{:12} [{{elapsed_precise}}] {{bar:40.cyan/blue}} {{percent}}% \
+                        {{pos:>7}}/{{len:7}} {{msg}}",
                         repo.name
                     )
                     .as_str(),
@@ -41,25 +43,90 @@ impl Workspace {
                 .unwrap()
                 .progress_chars("=> "),
             );
+
+            let main = bars.add(main);
+
+            let style = ProgressStyle::with_template(
+                format!(
+                    "{:12} [{{elapsed_precise}}] {{bar:40.cyan/blue}} {{percent}}% \
+                    {{pos:>7}}/{{len:7}} {{msg}}",
+                    ""
+                )
+                .as_str(),
+            )
+            .unwrap()
+            .progress_chars("=> ");
+
+            let mut indexed = ProgressBar::new(0);
+            indexed.set_style(style.clone());
+            let mut deltas = ProgressBar::new(0);
+            deltas.set_style(style.clone());
+
+            // indexed = bars.insert(2, indexed);
+            // deltas = bars.insert(3, deltas);
+
             let mut last_v: u64 = 0;
-            let mut has_length = false;
-            match repo.sync(|phase: &str, n: u64, total: u64| {
-                if n == last_v {
-                    return;
-                }
-                if !has_length && total > 0 {
-                    bar.set_length(total);
-                    has_length = true;
-                }
-                bar.set_position(n);
-                bar.set_message(format!("{}", phase));
-                last_v = n;
-            }) {
+            let mut last_length = 0_u64;
+            let mut has_indexed = false;
+            let mut has_deltas = false;
+
+            match repo.sync(
+                |phase: &str,
+                 objs_recvd: u64,
+                 objs_indexed: u64,
+                 objs_total: u64,
+                 delta_indexed: u64,
+                 delta_total: u64| {
+                    let total = objs_total + delta_total;
+                    let n = objs_recvd + delta_indexed;
+
+                    if objs_recvd == objs_total
+                        && objs_indexed == objs_total
+                        && delta_indexed == delta_total
+                    {
+                        return;
+                    }
+                    if total > last_length {
+                        main.set_length(total);
+                        last_length = total;
+                    }
+                    main.set_position(n);
+                    main.set_message(format!("{}", phase));
+                    last_v = objs_recvd;
+
+                    if !has_indexed && objs_indexed > 0 {
+                        indexed = bars.insert(2, indexed.clone());
+                        indexed.set_length(objs_total);
+                        indexed.set_message("indexing");
+                        has_indexed = true;
+                    }
+                    if !has_deltas && delta_indexed > 0 {
+                        deltas = bars.insert(3, deltas.clone());
+                        deltas.set_length(delta_total);
+                        deltas.set_message("applying deltas");
+                        has_deltas = true;
+                    }
+
+                    if objs_indexed > 0 {
+                        indexed.set_position(objs_indexed);
+                    }
+                    if delta_indexed > 0 {
+                        deltas.set_position(delta_indexed);
+                    }
+
+                    if objs_indexed > 0 && objs_indexed == objs_total {
+                        indexed.set_message("done");
+                    }
+                    if delta_indexed > 0 && delta_indexed == delta_total {
+                        deltas.set_message("done");
+                    }
+                },
+            ) {
                 Ok(_) => {
-                    bar.finish_with_message("done");
+                    main.finish_with_message("done");
                 }
                 Err(_) => {
-                    bar.finish_with_message("error");
+                    main.finish_with_message("error");
                     return Err(());
                 }
             };

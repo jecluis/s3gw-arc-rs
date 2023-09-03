@@ -17,6 +17,8 @@ use std::path::PathBuf;
 use crate::ws::{version::Version, workspace::Workspace};
 
 pub mod cmds;
+mod common;
+pub mod errors;
 mod init;
 mod list;
 mod start;

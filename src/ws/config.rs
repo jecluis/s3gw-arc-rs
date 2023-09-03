@@ -20,6 +20,8 @@ pub struct WSGitRepoConfigValues {
     pub readwrite: String,
     pub tag_pattern: String,
     pub branch_pattern: String,
+    pub tag_format: String,
+    pub branch_format: String,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
@@ -72,24 +74,32 @@ impl Default for WSConfig {
                     readwrite: String::from("git@github.com:aquarist-labs/s3gw.git"),
                     tag_pattern: String::from(r"^v(\d+\.\d+\.\d+.*)$"),
                     branch_pattern: String::from(r"^s3gw-v(\d+\.\d+)$"),
+                    tag_format: String::from("v{{major}}.{{minor}}.{{patch}}"),
+                    branch_format: String::from("s3gw-v{{major}}.{{minor}}"),
                 },
                 ceph: WSGitRepoConfigValues {
                     readonly: String::from("https://github.com/aquarist-labs/ceph.git"),
                     readwrite: String::from("git@github.com:aquarist-labs/ceph.git"),
                     tag_pattern: String::from(r"^s3gw-v(\d+\.\d+\.\d+.*)$"),
                     branch_pattern: String::from(r"^s3gw-v(\d+\.\d+)$"),
+                    tag_format: String::from("s3gw-v{{major}}.{{minor}}.{{patch}}"),
+                    branch_format: String::from("s3gw-v{{major}}.{{minor}}"),
                 },
                 ui: WSGitRepoConfigValues {
                     readonly: String::from("https://github.com/aquarist-labs/s3gw-ui.git"),
                     readwrite: String::from("git@github.com:aquarist-labs/s3gw-ui.git"),
                     tag_pattern: String::from(r"^s3gw-v(\d+\.\d+\.\d+.*)$"),
                     branch_pattern: String::from(r"^s3gw-v(\d+\.\d+)$"),
+                    tag_format: String::from("s3gw-v{{major}}.{{minor}}.{{patch}}"),
+                    branch_format: String::from("s3gw-v{{major}}.{{minor}}"),
                 },
                 charts: WSGitRepoConfigValues {
                     readonly: String::from("https://github.com/aquarist-labs/s3gw-charts.git"),
                     readwrite: String::from("git@github.com:aquarist-labs/s3gw-charts.git"),
                     tag_pattern: String::from(r"^s3gw-v(\d+\.\d+\.\d+.*)$"),
                     branch_pattern: String::from(r"^v(\d+\.\d+)$"),
+                    tag_format: String::from("s3gw-v{{major}}.{{minor}}.{{patch}}"),
+                    branch_format: String::from("v{{major}}.{{minor}}"),
                 },
             },
             registry: WSRegistryConfig {

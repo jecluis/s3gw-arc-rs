@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use handlebars::Handlebars;
+use std::collections::HashMap;
 use std::{collections::BTreeMap, fmt::Display};
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
@@ -118,6 +120,25 @@ impl Version {
             patch,
             rc,
         })
+    }
+
+    /// Returns a version string based on the provided format.
+    ///
+    pub fn to_str_fmt(self: &Self, fmt: &String) -> String {
+        let mut hb = Handlebars::new();
+        hb.register_template_string("version", &fmt).unwrap();
+
+        let mut data = HashMap::new();
+        data.insert("major", self.major);
+        data.insert("minor", self.minor);
+        if let Some(p) = self.patch {
+            data.insert("patch", p);
+        }
+        if let Some(rc) = self.rc {
+            data.insert("rc", rc);
+        }
+
+        hb.render("version", &data).unwrap()
     }
 
     pub fn get_version_id(self: &Self) -> u64 {

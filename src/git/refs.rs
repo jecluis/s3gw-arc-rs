@@ -61,4 +61,46 @@ impl GitRefs {
 
         Ok(GitRefs { branches, tags })
     }
+
+    pub fn from_local(repo: &git2::Repository) -> Result<GitRefs, ()> {
+        let mut branches: Vec<GitRefEntry> = vec![];
+        let mut tags: Vec<GitRefEntry> = vec![];
+
+        let ref_it = match repo.references() {
+            Ok(r) => r,
+            Err(err) => {
+                log::error!("Unable to obtain local repository references: {}", err);
+                return Err(());
+            }
+        };
+
+        for entry in ref_it {
+            if let Ok(r) = entry {
+                let oid = match r.peel_to_commit() {
+                    Err(err) => {
+                        log::error!(
+                            "Unable to obtain commit for {}: {}",
+                            r.name().unwrap_or("N/A"),
+                            err
+                        );
+                        String::from("N/A")
+                    }
+                    Ok(c) => c.id().to_string(),
+                };
+                println!(
+                    "ref name: {}, is_branch: {}, is_tag: {}, is_remote: {}, oid: {}",
+                    match r.name() {
+                        None => "N/A",
+                        Some(v) => v,
+                    },
+                    r.is_branch(),
+                    r.is_tag(),
+                    r.is_remote(),
+                    oid,
+                );
+            }
+        }
+
+        Err(())
+    }
 }

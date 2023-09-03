@@ -54,7 +54,46 @@ fn prompt_custom_git_repo_value(
         readwrite: rw,
         tag_pattern: default.tag_pattern.clone(),
         branch_pattern: default.branch_pattern.clone(),
+        tag_format: default.tag_format.clone(),
+        branch_format: default.branch_format.clone(),
     }))
+}
+
+/// Prompt for a custom github repository belonging to a specific organization.
+/// This is a helper function.
+///
+fn prompt_custom_github_repo_value(
+    name: &str,
+    org: &String,
+    default_name: &str,
+    default: &WSGitRepoConfigValues,
+) -> Result<WSGitRepoConfigValues, ()> {
+    let mut repo = String::from(default_name);
+
+    if match Confirm::new(&format!("Set custom repo for {} on '{}'?", name, org))
+        .with_default(true)
+        .prompt()
+    {
+        Ok(res) => res,
+        Err(_) => return Err(()),
+    } {
+        repo = match Text::new(&format!("{} repository at '{}':", name, org))
+            .with_default(&default_name)
+            .prompt()
+        {
+            Ok(v) => v,
+            Err(_) => return Err(()),
+        };
+    }
+
+    Ok(WSGitRepoConfigValues {
+        readonly: format!("https://github.com/{}/{}", org, repo),
+        readwrite: format!("git@github.com:{}/{}", org, repo),
+        tag_pattern: default.tag_pattern.clone(),
+        branch_pattern: default.branch_pattern.clone(),
+        tag_format: default.tag_format.clone(),
+        branch_format: default.branch_format.clone(),
+    })
 }
 
 /// Prompt for custom git repositories for the various tracked repositories.
@@ -62,37 +101,61 @@ fn prompt_custom_git_repo_value(
 fn prompt_custom_git_repos(default: &WSGitReposConfig) -> Result<WSGitReposConfig, ()> {
     let mut cfg = default.clone();
 
-    match prompt_custom_git_repo_value("s3gw", &default.s3gw) {
-        Ok(None) => {}
-        Ok(Some(v)) => {
-            cfg.s3gw = v;
-        }
+    if match Confirm::new("From GitHub?").with_default(true).prompt() {
+        Ok(v) => v,
         Err(_) => return Err(()),
-    };
+    } {
+        let org = match Text::new("Organization:")
+            .with_default("aquarist-labs")
+            .prompt()
+        {
+            Ok(v) => v,
+            Err(_) => return Err(()),
+        };
 
-    match prompt_custom_git_repo_value("s3gw-ui", &default.ui) {
-        Ok(None) => {}
-        Ok(Some(v)) => {
-            cfg.ui = v;
-        }
-        Err(_) => return Err(()),
-    };
+        let repo_vec = vec![
+            ("s3gw", "s3gw.git", &default.s3gw, &mut cfg.s3gw),
+            ("s3gw-ui", "s3gw-ui.git", &default.ui, &mut cfg.ui),
+            (
+                "charts",
+                "s3gw-charts.git",
+                &default.charts,
+                &mut cfg.charts,
+            ),
+            ("ceph", "ceph.git", &default.ceph, &mut cfg.ceph),
+        ];
 
-    match prompt_custom_git_repo_value("charts", &default.charts) {
-        Ok(None) => {}
-        Ok(Some(v)) => {
-            cfg.charts = v;
+        for entry in repo_vec {
+            match prompt_custom_github_repo_value(entry.0, &org, entry.1, &entry.2) {
+                Ok(v) => {
+                    let tgt = entry.3;
+                    *tgt = v;
+                }
+                Err(()) => return Err(()),
+            };
         }
-        Err(_) => return Err(()),
-    };
 
-    match prompt_custom_git_repo_value("ceph", &default.ceph) {
-        Ok(None) => {}
-        Ok(Some(v)) => {
-            cfg.ceph = v;
-        }
-        Err(_) => return Err(()),
-    };
+        log::trace!("{}", serde_json::to_string_pretty(&cfg).unwrap());
+        return Ok(cfg);
+    }
+
+    let repo_vec = vec![
+        ("s3gw", &default.s3gw, &mut cfg.s3gw),
+        ("s3gw-ui", &default.ui, &mut cfg.ui),
+        ("charts", &default.charts, &mut cfg.charts),
+        ("ceph", &default.ceph, &mut cfg.ceph),
+    ];
+
+    for entry in repo_vec {
+        match prompt_custom_git_repo_value(entry.0, entry.1) {
+            Ok(None) => {}
+            Ok(Some(v)) => {
+                let tgt = entry.2;
+                *tgt = v;
+            }
+            Err(()) => return Err(()),
+        };
+    }
 
     Ok(cfg)
 }
@@ -215,6 +278,11 @@ pub fn init_prompt(default_config: &WSConfig) -> Result<WSConfig, ()> {
         Ok(false) => {}
         Err(_) => return Err(()),
     };
+
+    log::trace!(
+        "final cfg = {}",
+        serde_json::to_string_pretty(&cfg.git).unwrap()
+    );
 
     match Confirm::new("Do you want to setup custom registries?")
         .with_default(false)
