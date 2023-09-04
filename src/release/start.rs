@@ -180,8 +180,6 @@ impl Release {
             }
         }
 
-        self.ws.repos.s3gw.tmp_get_refs();
-
         if repos_to_cut.len() == 0 {
             return Ok(None);
         } else if repos_to_cut.len() != repos.len() {

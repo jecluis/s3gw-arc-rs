@@ -394,7 +394,7 @@ impl GitRepo {
         self._remote_update("rw", true)
     }
 
-    pub fn get_refs(self: &Self) -> Result<super::refs::GitRefs, ()> {
+    pub fn get_refs(self: &Self) -> Result<Vec<super::refs::GitRefEntry>, ()> {
         let mut remote = self._get_remote("ro").unwrap();
         let mut conn = match self._open_remote(&mut remote, git2::Direction::Fetch, false) {
             Ok(v) => v,
@@ -404,10 +404,10 @@ impl GitRepo {
             }
         };
         let remote = conn.remote();
-        let refs = match super::refs::GitRefs::from_remote(&remote) {
+        let refs = match super::refs::get_refs_from(&remote, &self.repo) {
             Ok(v) => v,
-            Err(_) => {
-                log::error!("Unable to obtain refs from remote!");
+            Err(()) => {
+                log::error!("Unable to obtain references!");
                 return Err(());
             }
         };
@@ -465,9 +465,5 @@ impl GitRepo {
                 return Err(());
             }
         }
-    }
-
-    pub fn tmp_get_refs(self: &Self) {
-        super::refs::GitRefs::from_local(&self.repo).unwrap();
     }
 }

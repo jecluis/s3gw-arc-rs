@@ -203,7 +203,22 @@ impl Repository {
             .as_str(),
         );
 
-        for branch in refs.branches {
+        let branch_refs: Vec<&git::refs::GitRefEntry> =
+            refs.iter().filter(|e| e.is_branch()).collect();
+        let tag_refs: Vec<&git::refs::GitRefEntry> = refs.iter().filter(|e| e.is_tag()).collect();
+
+        log::trace!("--------- branches ----------");
+        log::trace!(" total: {}", branch_refs.len());
+        for branch in &branch_refs {
+            log::trace!(
+                " > {} (oid: {}), remote: {}",
+                branch.name,
+                branch.oid,
+                branch.is_remote
+            );
+        }
+
+        for branch in branch_refs {
             log::trace!("branch '{}' oid {}", branch.name, branch.oid);
             if let Some(m) = branch_re.captures(&branch.name) {
                 assert_eq!(m.len(), 2);
@@ -223,7 +238,7 @@ impl Repository {
             }
         }
 
-        for tag in refs.tags {
+        for tag in tag_refs {
             log::trace!("tag '{}' oid {}", tag.name, tag.oid);
             if let Some(m) = tag_re.captures(&tag.name) {
                 assert_eq!(m.len(), 2);
@@ -318,8 +333,11 @@ impl Repository {
         };
 
         let mut version_tree: BTreeMap<u64, super::version::BaseVersion> = BTreeMap::new();
+        let branch_refs: Vec<&git::refs::GitRefEntry> =
+            refs.iter().filter(|e| e.is_branch()).collect();
+        let tag_refs: Vec<&git::refs::GitRefEntry> = refs.iter().filter(|e| e.is_tag()).collect();
 
-        for branch in refs.branches {
+        for branch in branch_refs {
             log::trace!("branch '{}' oid {}", branch.name, branch.oid);
             if let Some(m) = branch_re.captures(&branch.name) {
                 assert_eq!(m.len(), 2);
@@ -342,7 +360,7 @@ impl Repository {
             }
         }
 
-        for tag in refs.tags {
+        for tag in tag_refs {
             log::trace!("tag '{}' oid {}", tag.name, tag.oid);
             if let Some(m) = tag_re.captures(&tag.name) {
                 assert_eq!(m.len(), 2);
@@ -425,7 +443,7 @@ impl Repository {
 
     fn get_versions_from_refs(
         self: &Self,
-        refs: &Vec<crate::git::refs::GitRefEntry>,
+        refs: &Vec<&crate::git::refs::GitRefEntry>,
         regex_pattern: &String,
     ) -> Result<BTreeMap<u64, Version>, ()> {
         let regex = match regex::Regex::new(&regex_pattern) {
@@ -467,7 +485,7 @@ impl Repository {
         Ok(versions)
     }
 
-    fn get_git_refs(self: &Self) -> Result<crate::git::refs::GitRefs, ()> {
+    fn get_git_refs(self: &Self) -> Result<Vec<crate::git::refs::GitRefEntry>, ()> {
         let git = match git::repo::GitRepo::open(&self.path) {
             Ok(v) => v,
             Err(()) => {
@@ -476,17 +494,6 @@ impl Repository {
             }
         };
         git.get_refs()
-    }
-
-    pub fn tmp_get_refs(self: &Self) {
-        let git = match git::repo::GitRepo::open(&self.path) {
-            Ok(v) => v,
-            Err(()) => {
-                log::error!("Unable to open git repository at '{}'", self.path.display());
-                return;
-            }
-        };
-        git.tmp_get_refs();
     }
 
     pub fn get_versions(self: &Self) -> Result<BTreeMap<u64, Version>, ()> {
@@ -501,7 +508,9 @@ impl Repository {
             }
         };
 
-        match self.get_versions_from_refs(&refs.tags, &self.config.tag_pattern) {
+        let tag_refs: Vec<&git::refs::GitRefEntry> = refs.iter().filter(|e| e.is_tag()).collect();
+
+        match self.get_versions_from_refs(&tag_refs, &self.config.tag_pattern) {
             Ok(v) => Ok(v),
             Err(()) => {
                 log::error!(
@@ -525,7 +534,10 @@ impl Repository {
             }
         };
 
-        match self.get_versions_from_refs(&refs.branches, &self.config.branch_pattern) {
+        let branch_refs: Vec<&crate::git::refs::GitRefEntry> =
+            refs.iter().filter(|e| e.is_branch()).collect();
+
+        match self.get_versions_from_refs(&branch_refs, &self.config.branch_pattern) {
             Ok(v) => Ok(v),
             Err(()) => {
                 log::error!(
