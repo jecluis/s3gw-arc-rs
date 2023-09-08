@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod args;
+mod common;
 mod git;
 mod release;
 mod ws;

@@ -21,6 +21,14 @@ use crate::{
 
 use super::Release;
 
+struct SubmoduleInfo<'a> {
+    name: String,
+    repo: &'a Repository,
+    tag_oid: Option<String>,
+    commit_oid: Option<String>,
+    push_rc_tags: bool,
+}
+
 impl Release {
     pub fn start(self: &mut Self, version: &Version, notes: &PathBuf) -> Result<(), ()> {
         // 1. sync rw repos to force authorized connect
@@ -275,13 +283,91 @@ impl Release {
 
         // start release candidate on the various repositories, except
         // 's3gw.git'.
-        let repos = vec![
-            &self.ws.repos.ui,
-            &self.ws.repos.charts,
-            &self.ws.repos.ceph,
+        let mut submodules = vec![
+            SubmoduleInfo {
+                name: "ui".into(),
+                repo: &self.ws.repos.ui,
+                tag_oid: None,
+                commit_oid: None,
+                push_rc_tags: true,
+            },
+            SubmoduleInfo {
+                name: "charts".into(),
+                repo: &self.ws.repos.charts,
+                tag_oid: None,
+                commit_oid: None,
+                push_rc_tags: false,
+            },
+            SubmoduleInfo {
+                name: "ceph".into(),
+                repo: &self.ws.repos.ceph,
+                tag_oid: None,
+                commit_oid: None,
+                push_rc_tags: true,
+            },
         ];
 
-        for repo in repos {}
+        for entry in &mut submodules {
+            log::info!(
+                "Tagging repository '{}' with version '{}'",
+                entry.repo.name,
+                next_ver
+            );
+            let (tag_oid, commit_oid) = match entry.repo.tag_release_branch(&relver, &next_ver) {
+                Ok((tag_oid, commit_oid)) => {
+                    log::info!(
+                        "Tagged version '{}' with '{}' oid {} commit {}",
+                        relver,
+                        next_ver,
+                        tag_oid,
+                        commit_oid,
+                    );
+                    (tag_oid, commit_oid)
+                }
+                Err(()) => {
+                    log::error!("Error tagging version '{}' with '{}'", relver, next_ver);
+                    return Err(ReleaseError::UnknownError);
+                }
+            };
+            entry.tag_oid = Some(tag_oid);
+            entry.commit_oid = Some(commit_oid);
+        }
+
+        // repositories have been tagged -- push them out so we can update the
+        // submodules on 's3gw.git'.
+        for entry in &submodules {
+            log::info!("Pushing '{}' to repository '{}'", relver, entry.name);
+            match entry.repo.push_release_branch(&relver) {
+                Ok(()) => {
+                    log::info!("Pushed '{}' to repository '{}'", relver, entry.name);
+                }
+                Err(()) => {
+                    log::error!("Error pushing '{}' to repository '{}'!", relver, entry.name);
+                    return Err(ReleaseError::UnknownError);
+                }
+            };
+
+            if !entry.push_rc_tags {
+                continue;
+            }
+
+            match entry.repo.push_release_tag(&next_ver) {
+                Ok(()) => {
+                    log::info!("Pushed '{}' to repository '{}'!", next_ver, entry.name);
+                }
+                Err(()) => {
+                    log::error!(
+                        "Error pushing '{}' to repository '{}'!",
+                        next_ver,
+                        entry.name
+                    );
+                    return Err(ReleaseError::UnknownError);
+                }
+            };
+        }
+
+        // update submodules on 's3gw.git' to reflect the current state of each
+        // repository.
 
         Err(ReleaseError::UnknownError)
     }

@@ -14,6 +14,8 @@
 
 use std::path::PathBuf;
 
+use crate::common::RepoUpdateProgress;
+
 pub struct GitRepo {
     path: PathBuf,
     ro: String,
@@ -24,44 +26,36 @@ pub struct GitRepo {
 impl GitRepo {
     /// Clone a repository into 'path', using the upstream remotes 'ro' and
     /// 'rw'. 'ro' refers to a read-only URI, and 'rw' as a read-write URI.
-    /// Operation progress will be tracked by 'progress_cb'.
     ///
-    pub fn clone<F>(
+    pub fn clone(
         path: &PathBuf,
         ro: &String,
         rw: &String,
-        mut progress_cb: F,
-    ) -> Result<GitRepo, ()>
-    where
-        F: FnMut(u64, u64, u64, u64, u64),
-    {
+        progress_desc: &String,
+    ) -> Result<GitRepo, ()> {
         if path.exists() {
             log::error!("Directory exists at {}, can't clone.", path.display());
             return Err(());
         }
-        let mut builder = git2::build::RepoBuilder::new();
-        let mut cbs = git2::RemoteCallbacks::new();
-        cbs.transfer_progress(|progress: git2::Progress| {
-            progress_cb(
-                progress.received_objects() as u64,
-                progress.indexed_objects() as u64,
-                progress.total_objects() as u64,
-                progress.indexed_deltas() as u64,
-                progress.total_deltas() as u64,
+
+        let mut progress = crate::common::RepoSyncProgress::new(progress_desc);
+        let cb = |p: git2::Progress| {
+            progress.handle_values(
+                "clone",
+                p.received_objects() as u64,
+                p.indexed_objects() as u64,
+                p.total_objects() as u64,
+                p.indexed_deltas() as u64,
+                p.total_deltas() as u64,
             );
-            true
-        });
-        let mut opts = git2::FetchOptions::new();
-        opts.remote_callbacks(cbs);
-        let repo = match builder.fetch_options(opts).clone(&ro, &path) {
-            Err(e) => {
-                log::error!("Unable to clone repository to {}: {}", path.display(), e);
+        };
+        let repo = match GitRepo::do_clone(&path, &ro, &rw, cb) {
+            Err(()) => {
+                progress.finish_with_error();
                 return Err(());
             }
             Ok(r) => {
-                r.remote_rename("origin", "ro")
-                    .expect("error renaming origin");
-                r.remote("rw", rw.as_str()).expect("error adding rw remote");
+                progress.finish();
                 r
             }
         };
@@ -72,6 +66,41 @@ impl GitRepo {
             rw: rw.clone(),
             repo,
         })
+    }
+
+    /// Performs the actual clone.
+    ///
+    fn do_clone<F>(
+        path: &PathBuf,
+        ro: &String,
+        rw: &String,
+        mut cb: F,
+    ) -> Result<git2::Repository, ()>
+    where
+        F: FnMut(git2::Progress),
+    {
+        let mut builder = git2::build::RepoBuilder::new();
+        let mut cbs = git2::RemoteCallbacks::new();
+        cbs.transfer_progress(|progress: git2::Progress| {
+            cb(progress);
+            true
+        });
+        let mut opts = git2::FetchOptions::new();
+        opts.remote_callbacks(cbs);
+        let repo = match builder.fetch_options(opts).clone(&ro, &path) {
+            Err(err) => {
+                log::error!("Unable to clone repository to {}: {}", path.display(), err);
+                return Err(());
+            }
+            Ok(r) => {
+                r.remote_rename("origin", "ro")
+                    .expect("error renaming origin");
+                r.remote("rw", rw.as_str()).expect("error adding rw remote");
+                r
+            }
+        };
+
+        Ok(repo)
     }
 
     /// Open an existing git repository at 'path'.
@@ -148,148 +177,7 @@ impl GitRepo {
         self
     }
 
-    // pub fn _get_refs(self: &Self) -> Result<(), ()> {
-    //     let branches = match self.repo.branches(None) {
-    //         Ok(v) => v,
-    //         Err(e) => {
-    //             log::error!(
-    //                 "Error obtaining repository {} branches: {}",
-    //                 self.path.display(),
-    //                 e
-    //             );
-    //             return Err(());
-    //         }
-    //     };
-
-    //     for entry in branches {
-    //         if let Err(e) = entry {
-    //             log::error!("Error listing branches: {}", e);
-    //             return Err(());
-    //         }
-    //         let (branch, branch_type) = entry.unwrap();
-    //         log::debug!(
-    //             "branch '{}' type '{}'",
-    //             branch.name().unwrap().unwrap(),
-    //             match branch_type {
-    //                 git2::BranchType::Local => "local",
-    //                 git2::BranchType::Remote => "remote",
-    //             }
-    //         );
-    //     }
-
-    //     log::debug!("Obtaining tags...");
-    //     match self.repo.tag_names(None /*Some("s3gw-*")*/) {
-    //         Ok(t) => {
-    //             for tag in t.iter() {
-    //                 log::debug!("tag found: {}", tag.unwrap());
-    //             }
-    //         }
-    //         Err(e) => {
-    //             log::error!("Error obtaining tags: {}", e);
-    //         }
-    //     };
-
-    //     let mut ro = self.repo.find_remote("ro").unwrap();
-    //     ro.connect(git2::Direction::Fetch)
-    //         .expect("Unable to connect to remote");
-
-    //     log::debug!("List repository...");
-    //     let rols = ro.list().unwrap();
-    //     for head in rols {
-    //         let tgt = head.symref_target().unwrap_or("N/A");
-    //         let oid = head.oid();
-    //         let mut kind = "N/A";
-    //         if let Ok(obj) = self.repo.find_object(oid, None) {
-    //             kind = match obj
-    //                 .kind()
-    //                 .expect(format!("Unable to obtain kind for oid {}", oid).as_str())
-    //             {
-    //                 git2::ObjectType::Any => "any",
-    //                 git2::ObjectType::Blob => "blob",
-    //                 git2::ObjectType::Commit => "commit",
-    //                 git2::ObjectType::Tag => "tag",
-    //                 git2::ObjectType::Tree => "tree",
-    //             };
-    //         }
-
-    //         log::debug!(
-    //             "head: {}, local: {}, target: {}, oid: {}, kind: {}",
-    //             head.name(),
-    //             head.is_local(),
-    //             tgt,
-    //             oid,
-    //             kind
-    //         );
-    //     }
-
-    //     log::debug!("default branch: {}", self.get_default_branch());
-
-    //     let branches_and_tags = GitRefs::from_remote(&ro).unwrap();
-    //     for entry in branches_and_tags.branches {
-    //         log::debug!("branch: {}, oid: {}", entry.name, entry.oid);
-    //     }
-    //     for entry in branches_and_tags.tags {
-    //         log::debug!("tag: {}, oid: {}", entry.name, entry.oid);
-    //     }
-
-    //     self._remote_update("ro").expect("Unable to update remote");
-    //     let v0180rc1_oid = git2::Oid::from_str("dc657a48600c7a87084252481740463e40faedff")
-    //         .expect("Unable to get oid for v0.18.0-rc1");
-    //     let v0180rc2_oid = git2::Oid::from_str("18f99637b7c10dfca7575244e2d649dd45610f04")
-    //         .expect("Unable to get oid for v0.18.0-rc2");
-    //     let (ahead, behind) = self
-    //         .get_graph_diff(v0180rc1_oid, v0180rc2_oid)
-    //         .expect("Error getting graph diff");
-    //     log::debug!("ahead: {}, behind: {}", ahead, behind);
-
-    //     log::debug!("List remote refspecs...");
-    //     for refspec in ro.refspecs() {
-    //         log::debug!(
-    //             "src: {}, dst: {}",
-    //             refspec.src().unwrap(),
-    //             refspec.dst().unwrap()
-    //         );
-    //     }
-
-    //     log::debug!("List fetched refspecs...");
-    //     let refspecs = ro.fetch_refspecs().expect("Unable to obtain refspecs!");
-    //     for refspec in refspecs.iter() {
-    //         log::debug!("{}", refspec.unwrap());
-    //     }
-
-    //     log::debug!("Obtaining references...");
-    //     let mut default_branch: Option<String> = None;
-    //     for entry in self.repo.references().unwrap() {
-    //         let refentry = entry.unwrap();
-    //         let refname = refentry.name().unwrap();
-    //         if refentry.is_branch() {
-    //             log::debug!("ref branch: {}", refname);
-    //         } else if refentry.is_tag() {
-    //             log::debug!("ref tag: {}", refname);
-    //         } else if refentry.is_remote() {
-    //             log::debug!("ref remote: {}", refname);
-    //             if refname == "refs/remotes/ro/HEAD" {
-    //                 if let Some(tgt) = refentry.symbolic_target() {
-    //                     default_branch = Some(String::from(tgt));
-    //                     break;
-    //                 }
-    //             }
-    //         } else {
-    //             log::debug!("something else: {}", refname);
-    //         }
-    //         if let Some(tgt) = refentry.symbolic_target() {
-    //             log::debug!("  symbolic target: {}", tgt);
-    //         }
-    //     }
-    //     if let Some(def) = default_branch {
-    //         let oid = self.repo.refname_to_id(def.as_str()).unwrap();
-    //         log::debug!("Default branch: {} ({})", def, oid);
-    //     }
-
-    //     Ok(())
-    // }
-
-    pub fn get_default_branch(self: &Self) -> String {
+    pub fn _get_default_branch(self: &Self) -> String {
         let head_ref = self
             .repo
             .find_reference("refs/remotes/ro/HEAD")
@@ -303,7 +191,7 @@ impl GitRepo {
         String::from(branch)
     }
 
-    pub fn get_graph_diff(
+    pub fn _get_graph_diff(
         self: &Self,
         local: git2::Oid,
         upstream: git2::Oid,
@@ -317,7 +205,7 @@ impl GitRepo {
         }
     }
 
-    fn _get_remote(self: &Self, name: &str) -> Result<git2::Remote, ()> {
+    fn get_remote(self: &Self, name: &str) -> Result<git2::Remote, ()> {
         match self.repo.find_remote(name) {
             Ok(r) => Ok(r),
             Err(e) => {
@@ -327,7 +215,7 @@ impl GitRepo {
         }
     }
 
-    fn _open_remote<'a, 'b>(
+    fn open_remote<'a, 'b>(
         self: &'a Self,
         remote: &'b mut git2::Remote<'a>,
         direction: git2::Direction,
@@ -361,9 +249,9 @@ impl GitRepo {
         Ok(conn)
     }
 
-    fn _remote_update(self: &Self, name: &str, auth: bool) -> Result<(), ()> {
-        let mut remote = self._get_remote(name).unwrap();
-        let mut conn = match self._open_remote(&mut remote, git2::Direction::Fetch, auth) {
+    fn do_remote_update(self: &Self, name: &str, auth: bool) -> Result<(), ()> {
+        let mut remote = self.get_remote(name).unwrap();
+        let mut conn = match self.open_remote(&mut remote, git2::Direction::Fetch, auth) {
             Ok(v) => v,
             Err(_) => {
                 log::error!("Unable to open remote '{}'", name);
@@ -384,19 +272,111 @@ impl GitRepo {
         Ok(())
     }
 
-    pub fn remote_update(self: &Self) -> Result<(), ()> {
-        match self._remote_update("ro", false) {
-            Ok(()) => {}
-            Err(()) => {
+    /// Update remotes
+    ///
+    pub fn remote_update(self: &Self, progress_desc: &String) -> Result<(), ()> {
+        let remotes = [("ro", false), ("rw", true)];
+
+        let progress = RepoUpdateProgress::new(&progress_desc);
+        progress.start();
+
+        for (remote, auth) in remotes {
+            progress.set_message(&remote.into());
+
+            match self.do_remote_update("ro", auth) {
+                Ok(()) => {}
+                Err(()) => {
+                    progress.finish_with_error();
+                    return Err(());
+                }
+            };
+        }
+        progress.finish();
+
+        Ok(())
+    }
+
+    pub fn submodules_update(self: &Self) -> Result<(), ()> {
+        let mut submodules = match self.repo.submodules() {
+            Ok(v) => v,
+            Err(err) => {
+                log::error!("Error obtaining repository's submodules: {}", err);
                 return Err(());
             }
         };
-        self._remote_update("rw", true)
+
+        for sm in &mut submodules {
+            let sm_name = match sm.name() {
+                None => "N/A".into(),
+                Some(n) => {
+                    let p = n.split("/").last().unwrap_or("N/A");
+                    String::from(p)
+                }
+            };
+            let mut progress = crate::common::RepoSyncProgress::new(&format!("sub {}", sm_name));
+            let cb = |p: git2::Progress| {
+                progress.handle_values(
+                    "submodule update",
+                    p.received_objects() as u64,
+                    p.indexed_objects() as u64,
+                    p.total_objects() as u64,
+                    p.indexed_deltas() as u64,
+                    p.total_deltas() as u64,
+                );
+            };
+            log::debug!("Update submodule {}", sm_name);
+            match self.do_submodule_update(sm, cb) {
+                Ok(()) => {
+                    progress.finish();
+                }
+                Err(()) => {
+                    progress.finish_with_error();
+                    log::error!("Error updating submodule {}", sm_name);
+                    return Err(());
+                }
+            };
+        }
+        Ok(())
+    }
+
+    fn do_submodule_update<F>(self: &Self, sm: &mut git2::Submodule, mut cb: F) -> Result<(), ()>
+    where
+        F: FnMut(git2::Progress),
+    {
+        let mut opts = git2::SubmoduleUpdateOptions::new();
+        let mut fetch_opts = git2::FetchOptions::new();
+        let mut cbs = git2::RemoteCallbacks::new();
+        cbs.transfer_progress(|progress: git2::Progress| {
+            cb(progress);
+            true
+        });
+        fetch_opts.remote_callbacks(cbs);
+        opts.fetch(fetch_opts);
+
+        match sm.update(true, Some(&mut opts)) {
+            Ok(()) => {
+                log::debug!("Updated submodule");
+            }
+            Err(err) => {
+                log::error!("Unable to update submodule: {}", err);
+                return Err(());
+            }
+        };
+        match sm.sync() {
+            Ok(()) => {
+                log::debug!("Sync'ed submodule");
+            }
+            Err(err) => {
+                log::error!("Unable to sync submodule: {}", err);
+                return Err(());
+            }
+        };
+        Ok(())
     }
 
     pub fn get_refs(self: &Self) -> Result<Vec<super::refs::GitRefEntry>, ()> {
-        let mut remote = self._get_remote("ro").unwrap();
-        let mut conn = match self._open_remote(&mut remote, git2::Direction::Fetch, false) {
+        let mut remote = self.get_remote("ro").unwrap();
+        let mut conn = match self.open_remote(&mut remote, git2::Direction::Fetch, false) {
             Ok(v) => v,
             Err(_) => {
                 log::error!("Unable to open remote to obtain refs!");
@@ -416,8 +396,8 @@ impl GitRepo {
     }
 
     pub fn test_ssh(self: &Self) {
-        let mut remote = self._get_remote("rw").unwrap();
-        let mut conn = match self._open_remote(&mut remote, git2::Direction::Fetch, true) {
+        let mut remote = self.get_remote("rw").unwrap();
+        let mut conn = match self.open_remote(&mut remote, git2::Direction::Fetch, true) {
             Ok(v) => v,
             Err(()) => {
                 log::error!("Unable to open remote to test ssh!");
@@ -465,5 +445,112 @@ impl GitRepo {
                 return Err(());
             }
         }
+    }
+
+    pub fn find_branch(self: &Self, name: &String, is_remote: &bool) -> Result<git2::Branch, ()> {
+        match self.repo.find_branch(
+            &name.as_str(),
+            match is_remote {
+                true => git2::BranchType::Remote,
+                false => git2::BranchType::Local,
+            },
+        ) {
+            Ok(b) => Ok(b),
+            Err(err) => {
+                log::error!(
+                    "Unable to find branch {} '{}': {}",
+                    match is_remote {
+                        true => "remote",
+                        false => "local",
+                    },
+                    name,
+                    err
+                );
+                Err(())
+            }
+        }
+    }
+
+    pub fn _tag_branch(self: &Self, branchname: &String, tagname: &String) -> Result<(), ()> {
+        let obj = match self.repo.revparse_single(&branchname) {
+            Ok(o) => o,
+            Err(err) => {
+                log::error!("Unable to find branch '{}': {}", branchname, err);
+                return Err(());
+            }
+        };
+
+        let sig = match self.repo.signature() {
+            Ok(s) => s,
+            Err(err) => {
+                log::error!("Unable to obtain signature: {}", err);
+                return Err(());
+            }
+        };
+
+        let msg = format!("testing tagging for '{}'", tagname);
+        let tag = match self
+            .repo
+            .tag(tagname.as_str(), &obj, &sig, msg.as_str(), false)
+        {
+            Ok(t) => t,
+            Err(err) => {
+                log::error!(
+                    "Unable to tag branch '{}' (oid: {}) with '{}': {}",
+                    branchname,
+                    obj.id(),
+                    tagname,
+                    err
+                );
+                return Err(());
+            }
+        };
+
+        log::info!("Tagged branch '{}' with '{}': {}", branchname, tagname, tag);
+
+        Ok(())
+    }
+
+    pub fn get_oid_by_refspec(self: &Self, refspec: &String) -> Result<git2::Object, ()> {
+        match self.repo.revparse_single(&refspec) {
+            Ok(o) => Ok(o),
+            Err(err) => {
+                log::error!("Unable to find oid for '{}': {}", refspec, err);
+                return Err(());
+            }
+        }
+    }
+
+    pub fn push(self: &Self, refspec: &String) -> Result<(), ()> {
+        let mut remote = match self.get_remote("rw") {
+            Ok(r) => r,
+            Err(()) => {
+                log::error!("Error obtaining 'rw' remote to push refspec '{}'", refspec);
+                return Err(());
+            }
+        };
+        let mut conn = match self.open_remote(&mut remote, git2::Direction::Push, true) {
+            Ok(c) => c,
+            Err(()) => {
+                log::error!(
+                    "Error opening remote 'rw' connection to push refspec '{}'",
+                    refspec
+                );
+                return Err(());
+            }
+        };
+
+        let remote = conn.remote();
+        match remote.push(&[refspec], None) {
+            Ok(()) => {
+                log::trace!("Pushed refspec '{}'", refspec);
+            }
+            Err(err) => {
+                log::error!("Unable to push refspec '{}' to rw remote: {}", refspec, err);
+                return Err(());
+            }
+        };
+
+        Ok(())
     }
 }
