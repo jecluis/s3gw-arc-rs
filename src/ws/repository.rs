@@ -228,9 +228,9 @@ impl Repository {
                 };
                 let version_str = String::from(version.as_str());
                 log::trace!("  version: {}", version_str);
-                assert!(!versions.contains_key(&version_str));
-
-                versions.insert(version_str, vec![]);
+                if !versions.contains_key(&version_str) {
+                    versions.insert(version_str, vec![]);
+                }
             }
         }
 
