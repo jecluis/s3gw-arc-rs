@@ -110,6 +110,36 @@ impl Repository {
         Ok(repo)
     }
 
+    fn version_to_str(self: &Self, ver: &Version, is_tag: bool) -> String {
+        log::trace!(
+            "version_to_str: repo name '{}' path '{}' format '{}'",
+            self.name,
+            self.path.display(),
+            if is_tag {
+                &self.config.tag_format
+            } else {
+                &self.config.branch_format
+            }
+        );
+        let ver_base_str = ver.to_str_fmt(if is_tag {
+            &self.config.tag_format
+        } else {
+            &self.config.branch_format
+        });
+        log::trace!(
+            "version_to_str: base str '{}' ver '{}' is_tag {}",
+            ver_base_str,
+            ver,
+            is_tag
+        );
+        if let Some(rc) = ver.rc {
+            assert!(is_tag);
+            format!("{}-rc{}", ver_base_str, rc)
+        } else {
+            ver_base_str
+        }
+    }
+
     /// Synchronize local repository with its upstream. If the repository does
     /// not exist yet, it will be cloned.
     ///
@@ -609,13 +639,27 @@ impl Repository {
         let dst_branch = dst.to_str_fmt(&self.config.branch_format);
         match git.branch_from_default(&dst_branch) {
             Ok(()) => {
-                log::info!("success!");
+                log::info!("Success branching from default to '{}'!", dst_branch);
             }
             Err(()) => {
-                log::error!("error!");
+                log::error!("Error branching from default to '{}'!", dst_branch);
                 return Err(());
             }
         }
+
+        match git.checkout_branch(&dst_branch) {
+            Ok(()) => {
+                log::info!("Checked out '{}' on repository '{}'", dst_branch, self.name);
+            }
+            Err(()) => {
+                log::error!(
+                    "Unable to checkout '{}' on repository '{}'",
+                    dst_branch,
+                    self.name
+                );
+                return Err(());
+            }
+        };
 
         Ok(())
     }
@@ -678,7 +722,7 @@ impl Repository {
         let patchver = if let Some(v) = &relver.patch {
             v
         } else {
-            return Err(());
+            panic!("Expected patch version on relver '{}'", relver);
         };
         let tagver_str = format!("v{}.{}.{}", &relver.major, &relver.minor, &patchver);
         let tag_msg = match tagver.rc {
@@ -741,7 +785,7 @@ impl Repository {
             commit_oid,
         );
 
-        Ok((tag_oid, commit_oid))
+        Ok((tag_name, tag_oid))
     }
 
     fn get_sha1_by_refspec(self: &Self, refspec: &String) -> Result<(String, String), ()> {
@@ -790,19 +834,127 @@ impl Repository {
     }
 
     pub fn push_release_branch(self: &Self, relver: &Version) -> Result<(), ()> {
-        let relver_str = relver.to_str_fmt(&self.config.branch_format);
+        let relver_str = self.version_to_str(&relver, false);
         let refspec = format!("refs/heads/{}", relver_str);
         self.push(&refspec)
     }
 
     pub fn push_release_tag(self: &Self, tagver: &Version) -> Result<(), ()> {
-        let tagver_base_str = tagver.to_str_fmt(&self.config.tag_format);
-        let tagver_str = if let Some(rc) = tagver.rc {
-            format!("{}-rc{}", tagver_base_str, rc)
-        } else {
-            tagver_base_str
-        };
+        let tagver_str = self.version_to_str(&tagver, true);
         let refspec = format!("refs/tags/{}", tagver_str);
         self.push(&refspec)
+    }
+
+    pub fn set_submodule_head(
+        self: &Self,
+        name: &String,
+        name_spec: &String,
+        is_tag: bool,
+    ) -> Result<PathBuf, ()> {
+        let git = match git::repo::GitRepo::open(&self.path) {
+            Ok(r) => r,
+            Err(()) => {
+                log::error!("Unable to open git repository at '{}'", self.path.display());
+                return Err(());
+            }
+        };
+        log::trace!(
+            "Set submodule '{}' head to {} '{}'",
+            name,
+            if is_tag { "tag" } else { "head" },
+            name_spec
+        );
+        let refname = format!(
+            "refs/{}/{}",
+            if is_tag { "tags" } else { "heads" },
+            name_spec
+        );
+        let path = match git.set_submodule_head(&name, &refname) {
+            Ok(p) => {
+                log::debug!("Success setting submodule '{}' head to '{}'", name, refname);
+                p
+            }
+            Err(()) => {
+                log::error!("Error setting submodule '{}' head to '{}'", name, refname);
+                return Err(());
+            }
+        };
+
+        Ok(path)
+    }
+
+    pub fn stage_paths(self: &Self, paths: &Vec<PathBuf>) -> Result<(), ()> {
+        let git = match git::repo::GitRepo::open(&self.path) {
+            Ok(r) => r,
+            Err(()) => {
+                log::error!("Unable to open git repository at '{}'", self.path.display());
+                return Err(());
+            }
+        };
+        log::debug!(
+            "Staging paths: {}",
+            paths
+                .iter()
+                .map(|e| e.to_str().unwrap())
+                .collect::<Vec<&str>>()
+                .join(", ")
+        );
+        match git.stage(&paths) {
+            Ok(()) => {
+                log::debug!("Staged paths!");
+            }
+            Err(()) => {
+                log::error!("Unable to stage paths!");
+                return Err(());
+            }
+        };
+        Ok(())
+    }
+
+    pub fn commit_release(self: &Self, relver: &Version, tagver: &Version) -> Result<(), ()> {
+        let relver_str = format!("v{}", relver);
+        let commit_msg = if let Some(rc) = &tagver.rc {
+            format!("release candidate {} for {}", rc, relver_str)
+        } else {
+            format!("release {}", relver_str)
+        };
+
+        log::debug!("Committing release ver '{}' tag '{}'", relver, tagver);
+        match std::process::Command::new("git")
+            .args([
+                "-C",
+                self.path.to_str().unwrap(),
+                "commit",
+                "--gpg-sign",
+                "--signoff",
+                "-m",
+                commit_msg.as_str(),
+            ])
+            .status()
+        {
+            Ok(res) => {
+                if !res.success() {
+                    log::error!("Unable to commit '{}': {}", tagver, res.code().unwrap());
+                    return Err(());
+                }
+            }
+            Err(err) => {
+                log::error!("Unable to commit '{}': {}", tagver, err);
+                return Err(());
+            }
+        };
+
+        let tag_name = self.version_to_str(&tagver, true);
+        log::debug!("Tag release with '{}'", tag_name);
+        match self.tag_release_branch(&relver, &tagver) {
+            Ok(_) => {
+                log::debug!("Tagged release with '{}'", tag_name);
+            }
+            Err(()) => {
+                log::error!("Error tagging release with '{}'", tag_name);
+            }
+        };
+
+        Ok(())
     }
 }

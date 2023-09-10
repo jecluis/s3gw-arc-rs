@@ -18,12 +18,14 @@ use crate::common::RepoUpdateProgress;
 
 pub struct GitRepo {
     path: PathBuf,
-    ro: String,
-    rw: String,
     repo: git2::Repository,
 }
 
 impl GitRepo {
+    pub fn get_git_repo(self: &Self) -> &git2::Repository {
+        &self.repo
+    }
+
     /// Clone a repository into 'path', using the upstream remotes 'ro' and
     /// 'rw'. 'ro' refers to a read-only URI, and 'rw' as a read-write URI.
     ///
@@ -62,8 +64,6 @@ impl GitRepo {
 
         Ok(GitRepo {
             path: path.to_path_buf(),
-            ro: ro.clone(),
-            rw: rw.clone(),
             repo,
         })
     }
@@ -114,37 +114,8 @@ impl GitRepo {
             }
         };
 
-        fn get_remote_url(r: &git2::Remote) -> String {
-            String::from(r.url().unwrap())
-        }
-
-        let ro = match repo.find_remote("ro") {
-            Ok(v) => get_remote_url(&v),
-            Err(e) => {
-                log::error!(
-                    "Unable to obtain read-only remote for {}: {}",
-                    path.display(),
-                    e
-                );
-                return Err(());
-            }
-        };
-        let rw = match repo.find_remote("rw") {
-            Ok(v) => get_remote_url(&v),
-            Err(e) => {
-                log::error!(
-                    "Unable to obtain read-write remote for {}: {}",
-                    path.display(),
-                    e
-                );
-                return Err(());
-            }
-        };
-
         Ok(GitRepo {
             path: path.to_path_buf(),
-            ro,
-            rw,
             repo,
         })
     }
@@ -249,7 +220,7 @@ impl GitRepo {
         Ok(conn)
     }
 
-    fn do_remote_update(self: &Self, name: &str, auth: bool) -> Result<(), ()> {
+    fn do_remote_update_single(self: &Self, name: &str, auth: bool) -> Result<(), ()> {
         let mut remote = self.get_remote(name).unwrap();
         let mut conn = match self.open_remote(&mut remote, git2::Direction::Fetch, auth) {
             Ok(v) => v,
@@ -258,10 +229,13 @@ impl GitRepo {
                 return Err(());
             }
         };
+        let mut opts = git2::FetchOptions::new();
+        opts.download_tags(git2::AutotagOption::All);
+
         let remote = conn.remote();
         log::info!("Updating remote '{}'", name);
         let x: [&str; 0] = [];
-        match remote.fetch(&x, None, None) {
+        match remote.fetch(&x, Some(&mut opts), None) {
             Ok(_) => {}
             Err(e) => {
                 log::error!("Unable to update remote '{}': {}", name, e);
@@ -272,18 +246,27 @@ impl GitRepo {
         Ok(())
     }
 
-    /// Update remotes
+    /// Update default remotes. This means 'ro' and 'rw'.
     ///
     pub fn remote_update(self: &Self, progress_desc: &String) -> Result<(), ()> {
-        let remotes = [("ro", false), ("rw", true)];
+        let remotes = vec![("ro", false), ("rw", true)];
+        self.remote_update_vec(&progress_desc, &remotes)
+    }
 
+    /// Update remotes specified by the provided vector.
+    ///
+    pub fn remote_update_vec(
+        self: &Self,
+        progress_desc: &String,
+        remotes: &Vec<(&str, bool)>,
+    ) -> Result<(), ()> {
         let progress = RepoUpdateProgress::new(&progress_desc);
         progress.start();
 
         for (remote, auth) in remotes {
-            progress.set_message(&remote.into());
+            progress.set_message(&String::from(*remote));
 
-            match self.do_remote_update("ro", auth) {
+            match self.do_remote_update_single(remote, *auth) {
                 Ok(()) => {}
                 Err(()) => {
                     progress.finish_with_error();
@@ -447,6 +430,29 @@ impl GitRepo {
         }
     }
 
+    pub fn checkout_branch(self: &Self, name: &String) -> Result<(), ()> {
+        let refname = format!("refs/heads/{}", name);
+        match self.repo.set_head(&refname) {
+            Ok(()) => {}
+            Err(err) => {
+                log::error!("Error setting repository's head to '{}': {}", name, err);
+                return Err(());
+            }
+        };
+        match self
+            .repo
+            .checkout_head(Some(git2::build::CheckoutBuilder::default().force()))
+        {
+            Ok(()) => {}
+            Err(err) => {
+                log::error!("Error checking out repository's head: {}", err);
+                return Err(());
+            }
+        };
+
+        Ok(())
+    }
+
     pub fn find_branch(self: &Self, name: &String, is_remote: &bool) -> Result<git2::Branch, ()> {
         match self.repo.find_branch(
             &name.as_str(),
@@ -547,6 +553,103 @@ impl GitRepo {
             }
             Err(err) => {
                 log::error!("Unable to push refspec '{}' to rw remote: {}", refspec, err);
+                return Err(());
+            }
+        };
+
+        Ok(())
+    }
+
+    pub fn set_submodule_head(self: &Self, name: &String, refname: &String) -> Result<PathBuf, ()> {
+        let submodule = match self.repo.find_submodule(&name) {
+            Ok(s) => s,
+            Err(err) => {
+                log::error!("Unable to find submodule '{}': {}", name, err);
+                return Err(());
+            }
+        };
+
+        let submodule_path = submodule.path();
+        let repo_path = self.path.join(submodule_path);
+        if !repo_path.exists() {
+            log::error!(
+                "Submodule '{}' path at '{}' does not exist!",
+                name,
+                repo_path.display()
+            );
+            return Err(());
+        }
+
+        let repo = match GitRepo::open(&repo_path.to_path_buf()) {
+            Ok(r) => r,
+            Err(()) => {
+                log::error!(
+                    "Unable to open git repository at '{}'!",
+                    repo_path.display()
+                );
+                return Err(());
+            }
+        };
+
+        match repo.remote_update_vec(&format!("sub {}", name), &vec![("origin", false)]) {
+            Ok(()) => {}
+            Err(()) => {
+                log::error!("Unable to update 'origin' for submodule '{}'", name);
+                return Err(());
+            }
+        };
+
+        let git = repo.get_git_repo();
+        match git.set_head(&refname) {
+            Ok(()) => {
+                log::debug!("Set submodule's head to '{}'", refname);
+            }
+            Err(err) => {
+                log::error!("Error setting submodule's head to '{}': {}", refname, err);
+                return Err(());
+            }
+        };
+        match git.checkout_head(Some(git2::build::CheckoutBuilder::default().force())) {
+            Ok(()) => {}
+            Err(err) => {
+                log::error!(
+                    "Error checking out object oid '{}' in submodule '{}': {}",
+                    refname,
+                    name,
+                    err
+                );
+                return Err(());
+            }
+        };
+
+        Ok(submodule_path.to_path_buf())
+    }
+
+    pub fn stage(self: &Self, paths: &Vec<PathBuf>) -> Result<(), ()> {
+        let mut index = match self.repo.index() {
+            Ok(idx) => idx,
+            Err(err) => {
+                log::error!("Unable to obtain repository's index: {}", err);
+                return Err(());
+            }
+        };
+        for path in paths {
+            match index.add_path(path) {
+                Ok(()) => {
+                    log::trace!("Added '{}' to index", path.display());
+                }
+                Err(err) => {
+                    log::error!("Error adding '{}' to index: {}", path.display(), err);
+                    return Err(());
+                }
+            };
+        }
+        match index.write() {
+            Ok(()) => {
+                log::debug!("Wrote index to disk");
+            }
+            Err(err) => {
+                log::error!("Error writing index to disk: {}", err);
                 return Err(());
             }
         };

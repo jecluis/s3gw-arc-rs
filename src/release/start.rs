@@ -25,7 +25,7 @@ struct SubmoduleInfo<'a> {
     name: String,
     repo: &'a Repository,
     tag_oid: Option<String>,
-    commit_oid: Option<String>,
+    tag_name: Option<String>,
     push_rc_tags: bool,
 }
 
@@ -288,21 +288,21 @@ impl Release {
                 name: "ui".into(),
                 repo: &self.ws.repos.ui,
                 tag_oid: None,
-                commit_oid: None,
+                tag_name: None,
                 push_rc_tags: true,
             },
             SubmoduleInfo {
                 name: "charts".into(),
                 repo: &self.ws.repos.charts,
                 tag_oid: None,
-                commit_oid: None,
-                push_rc_tags: false,
+                tag_name: None,
+                push_rc_tags: true,
             },
             SubmoduleInfo {
                 name: "ceph".into(),
                 repo: &self.ws.repos.ceph,
                 tag_oid: None,
-                commit_oid: None,
+                tag_name: None,
                 push_rc_tags: true,
             },
         ];
@@ -313,16 +313,16 @@ impl Release {
                 entry.repo.name,
                 next_ver
             );
-            let (tag_oid, commit_oid) = match entry.repo.tag_release_branch(&relver, &next_ver) {
-                Ok((tag_oid, commit_oid)) => {
+            let (tag_name, tag_oid) = match entry.repo.tag_release_branch(&relver, &next_ver) {
+                Ok((tag_name, tag_oid)) => {
                     log::info!(
-                        "Tagged version '{}' with '{}' oid {} commit {}",
+                        "Tagged version '{}' with '{}' oid {} name {}",
                         relver,
                         next_ver,
                         tag_oid,
-                        commit_oid,
+                        tag_name,
                     );
-                    (tag_oid, commit_oid)
+                    (tag_name, tag_oid)
                 }
                 Err(()) => {
                     log::error!("Error tagging version '{}' with '{}'", relver, next_ver);
@@ -330,7 +330,7 @@ impl Release {
                 }
             };
             entry.tag_oid = Some(tag_oid);
-            entry.commit_oid = Some(commit_oid);
+            entry.tag_name = Some(tag_name);
         }
 
         // repositories have been tagged -- push them out so we can update the
@@ -366,8 +366,81 @@ impl Release {
             };
         }
 
+        let mut paths_to_add: Vec<PathBuf> = vec![];
+
         // update submodules on 's3gw.git' to reflect the current state of each
         // repository.
+        for entry in &submodules {
+            let tag_name = match &entry.tag_name {
+                None => {
+                    log::error!("Tag name for submodule '{}' not set!", entry.name);
+                    return Err(ReleaseError::UnknownError);
+                }
+                Some(n) => n,
+            };
+            let path = match self
+                .ws
+                .repos
+                .s3gw
+                .set_submodule_head(&entry.name, &tag_name, true)
+            {
+                Ok(p) => {
+                    log::info!("Updated submodule '{}'", entry.name);
+                    p
+                }
+                Err(()) => {
+                    log::error!("Error updating submodule '{}'", entry.name);
+                    return Err(ReleaseError::UnknownError);
+                }
+            };
+            paths_to_add.push(path);
+        }
+
+        if let Some(notes_file) = notes {
+            // copy release notes file to its final destination.
+            let release_notes_file = format!("s3gw-v{}.md", next_ver);
+            let release_notes_path = PathBuf::from("docs/release-notes").join(release_notes_file);
+            let release_file_path = self.ws.repos.s3gw.path.join(&release_notes_path);
+
+            match std::fs::copy(&notes_file, &release_file_path) {
+                Ok(_) => {}
+                Err(err) => {
+                    log::error!(
+                        "Error copying notes file from '{}' to '{}': {}",
+                        notes_file.display(),
+                        release_file_path.display(),
+                        err
+                    );
+                }
+            };
+            paths_to_add.push(release_notes_path);
+        }
+
+        match self.ws.repos.s3gw.stage_paths(&paths_to_add) {
+            Ok(()) => {
+                log::info!(
+                    "Staged paths:\n{}",
+                    paths_to_add
+                        .iter()
+                        .map(|e| e.display().to_string())
+                        .collect::<Vec<String>>()
+                        .join("\n")
+                );
+            }
+            Err(()) => {
+                log::error!("Error staging paths!");
+                return Err(ReleaseError::UnknownError);
+            }
+        };
+
+        match self.ws.repos.s3gw.commit_release(&relver, &next_ver) {
+            Ok(()) => {
+                log::info!("Committed release '{}' tag '{}'", relver, next_ver);
+            }
+            Err(()) => {
+                log::error!("Unable to commit release '{}' tag '{}'", relver, next_ver);
+            }
+        };
 
         Err(ReleaseError::UnknownError)
     }
