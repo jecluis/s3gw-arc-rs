@@ -375,14 +375,15 @@ impl Repository {
                     continue;
                 };
                 let verid = version.get_version_id();
-                assert!(!version_tree.contains_key(&verid));
-                version_tree.insert(
-                    verid,
-                    crate::ws::version::BaseVersion {
-                        version,
-                        releases: BTreeMap::new(),
-                    },
-                );
+                if !version_tree.contains_key(&verid) {
+                    version_tree.insert(
+                        verid,
+                        crate::ws::version::BaseVersion {
+                            version,
+                            releases: BTreeMap::new(),
+                        },
+                    );
+                }
             }
         }
 
