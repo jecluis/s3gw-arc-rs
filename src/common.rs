@@ -78,7 +78,7 @@ pub struct RepoSyncProgress {
     has_deltas: bool,
 }
 
-pub struct RepoUpdateProgress {
+pub struct UpdateProgress {
     progress: ProgressBar,
 }
 
@@ -181,8 +181,8 @@ impl RepoSyncProgress {
     }
 }
 
-impl RepoUpdateProgress {
-    pub fn new(name: &String) -> RepoUpdateProgress {
+impl UpdateProgress {
+    pub fn new(name: &String) -> UpdateProgress {
         let len = 12.max(name.len());
         let progress = ProgressBar::new_spinner();
         progress.enable_steady_tick(std::time::Duration::from_millis(200));
@@ -199,7 +199,7 @@ impl RepoUpdateProgress {
         );
         progress.set_prefix(name.clone());
 
-        RepoUpdateProgress { progress }
+        UpdateProgress { progress }
     }
 
     pub fn start(self: &Self) {

@@ -14,7 +14,7 @@
 
 use std::path::PathBuf;
 
-use crate::common::RepoUpdateProgress;
+use crate::common::UpdateProgress;
 
 pub struct GitRepo {
     path: PathBuf,
@@ -260,7 +260,7 @@ impl GitRepo {
         progress_desc: &String,
         remotes: &Vec<(&str, bool)>,
     ) -> Result<(), ()> {
-        let progress = RepoUpdateProgress::new(&progress_desc);
+        let progress = UpdateProgress::new(&progress_desc);
         progress.start();
 
         for (remote, auth) in remotes {
