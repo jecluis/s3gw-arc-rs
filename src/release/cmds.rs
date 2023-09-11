@@ -14,6 +14,8 @@
 
 use std::path::PathBuf;
 
+use crate::{boomln, errorln, successln};
+
 #[derive(clap::Subcommand)]
 pub enum Cmds {
     /// Obtain release information.
@@ -112,21 +114,21 @@ pub fn handle_cmds(cmd: &Cmds) {
             };
 
             if !start_cmd.notes.exists() {
-                log::error!(
+                errorln!(format!(
                     "Release Notes file at {} does not exist!",
                     start_cmd.notes.display()
-                );
+                ));
                 return;
             } else {
                 match start_cmd.notes.extension() {
                     Some(ext) => {
                         if ext.to_ascii_lowercase() != "md" {
-                            log::error!("Provided Release Notes file is not a Markdown file!");
+                            errorln!("Provided Release Notes file is not a Markdown file!");
                             return;
                         }
                     }
                     None => {
-                        log::error!("Provided Release Notes file is not a Markdown file!");
+                        errorln!("Provided Release Notes file is not a Markdown file!");
                         return;
                     }
                 };
@@ -134,10 +136,13 @@ pub fn handle_cmds(cmd: &Cmds) {
 
             match release.start(&version, &start_cmd.notes) {
                 Ok(()) => {
-                    println!("Release for version {} successfully started!", &version);
+                    successln!(format!(
+                        "Release for version {} successfully started!",
+                        &version
+                    ));
                 }
                 Err(()) => {
-                    println!("Error starting new release!");
+                    boomln!("Error starting new release!");
                 }
             };
         }

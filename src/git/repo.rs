@@ -233,7 +233,7 @@ impl GitRepo {
         opts.download_tags(git2::AutotagOption::All);
 
         let remote = conn.remote();
-        log::info!("Updating remote '{}'", name);
+        log::debug!("Updating remote '{}'", name);
         let x: [&str; 0] = [];
         match remote.fetch(&x, Some(&mut opts), None) {
             Ok(_) => {}
@@ -242,7 +242,7 @@ impl GitRepo {
                 return Err(());
             }
         };
-        log::info!("Remote '{}' updated", name);
+        log::debug!("Remote '{}' updated", name);
         Ok(())
     }
 

@@ -15,7 +15,9 @@
 use std::path::PathBuf;
 
 use crate::{
+    boomln, errorln, infoln,
     release::{errors::ReleaseError, ReleaseState},
+    successln, warnln,
     ws::{repository::Repository, version::Version},
 };
 
@@ -38,18 +40,19 @@ impl Release {
         // 3. start release procedures.
 
         if let Some(s) = &self.state {
-            println!("On-going release detected!");
+            warnln!("On-going release detected!");
             if &s.release_version == version {
-                println!("  Maybe you want to 'continue' instead?");
+                infoln!("Maybe you want to 'continue' instead?");
             } else {
-                println!(
-                    "  Detected version {}, attempting to start {}!",
+                infoln!(format!(
+                    "Detected version {}, attempting to start {}!",
                     s.release_version, version
-                );
+                ));
             }
             return Err(());
         }
 
+        infoln!("Refresh workspace...");
         match self.ws.sync() {
             Ok(()) => {}
             Err(()) => {
@@ -62,7 +65,7 @@ impl Release {
         let mut avail_it = avail.iter();
 
         if avail_it.any(|(_, ver)| ver == version) {
-            println!("version {} has already been released.", version);
+            warnln!(format!("Version {} has already been released.", version));
             return Err(());
         }
 
@@ -71,21 +74,24 @@ impl Release {
         // every repository. For now we will ignore this bit.
 
         if avail_it.count() > 0 {
-            println!("release version {} has already been started.", version);
+            warnln!(format!(
+                "Release version {} has already been started.",
+                version
+            ));
             return Err(());
         }
 
-        log::info!("start releasing version {}", version);
+        infoln!(format!("Start releasing version {}", version));
 
         match self.create_release_branches(&version) {
             Ok(true) => {
-                println!("Created release branches.");
+                successln!("Created release branches.");
             }
             Ok(false) => {
-                println!("Release branches already exist.");
+                infoln!("Release branches already exist.");
             }
             Err(()) => {
-                log::error!("Error creating release!");
+                errorln!("Error creating release!");
                 return Err(());
             }
         };
@@ -99,7 +105,7 @@ impl Release {
         match self.write() {
             Ok(()) => {}
             Err(()) => {
-                log::error!("Unable to write release state file!");
+                boomln!("Unable to write release state file!");
                 return Err(());
             }
         };
@@ -112,24 +118,27 @@ impl Release {
                         // somehow this is not an "-rc1", which is unexpected
                         // given we are just starting a new release. Consider
                         // release corrupted!
-                        log::error!("Release is corrupted. Expected '-rc1', got '-rc{}'!", rc);
+                        boomln!(format!(
+                            "Release is corrupted. Expected '-rc1', got '-rc{}'!",
+                            rc
+                        ));
                         return Err(());
                     }
                 } else {
                     // expected an RC and didn't get one! Something is wrong!
-                    log::error!("Started release is not a release candidate. Got '{}'.", ver);
+                    errorln!(format!(
+                        "Started release is not a release candidate. Got '{}'.",
+                        ver
+                    ));
                     return Err(());
                 }
             }
             Err(err) => {
-                log::error!("Unable to start v{}-rc1: {}", version, err);
+                errorln!(format!("Unable to start v{}-rc1: {}", version, err));
                 return Err(());
             }
         };
 
-        self.ws.repos.s3gw.print_version_tree();
-
-        self.ws.repos.s3gw.test_ssh();
         Ok(())
     }
 
@@ -405,12 +414,12 @@ impl Release {
             match std::fs::copy(&notes_file, &release_file_path) {
                 Ok(_) => {}
                 Err(err) => {
-                    log::error!(
+                    boomln!(format!(
                         "Error copying notes file from '{}' to '{}': {}",
                         notes_file.display(),
                         release_file_path.display(),
                         err
-                    );
+                    ));
                 }
             };
             paths_to_add.push(release_notes_path);

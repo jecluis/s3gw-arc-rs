@@ -14,6 +14,56 @@
 
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 
+#[macro_export]
+macro_rules! warnln {
+    ($msg:expr) => {{
+        extern crate colored;
+        use colored::*;
+        println!("\u{26A0}\u{fe0f}  {}", $msg.magenta().bold());
+        log::warn!("{}", $msg);
+    }};
+}
+
+#[macro_export]
+macro_rules! infoln {
+    ($msg:expr) => {{
+        extern crate colored;
+        use colored::*;
+        println!("\u{2139}\u{fe0f}  {}", $msg.cyan().bold());
+        log::info!("{}", $msg);
+    }};
+}
+
+#[macro_export]
+macro_rules! boomln {
+    ($msg:expr) => {{
+        extern crate colored;
+        use colored::*;
+        println!("\u{1f4a5} {}", $msg.red().bold());
+        log::error!("{}", $msg);
+    }};
+}
+
+#[macro_export]
+macro_rules! errorln {
+    ($msg:expr) => {{
+        extern crate colored;
+        use colored::*;
+        println!("\u{274c}  {}", $msg.red().bold());
+        log::error!("{}", $msg);
+    }};
+}
+
+#[macro_export]
+macro_rules! successln {
+    ($msg:expr) => {
+        extern crate colored;
+        use colored::*;
+        println!("\u{2705} {}", $msg.green().bold());
+        log::info!("{}", $msg);
+    };
+}
+
 pub struct RepoSyncProgress {
     name: String,
     bars: MultiProgress,

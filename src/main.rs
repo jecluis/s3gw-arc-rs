@@ -20,7 +20,11 @@ mod ws;
 
 #[tokio::main]
 async fn main() {
-    env_logger::init();
+    env_logger::builder()
+        // .filter_level(log::LevelFilter::Info)
+        .parse_env("ARC_DEBUG")
+        .try_init()
+        .unwrap();
     let cmd = args::parse();
 
     match &cmd.command {
