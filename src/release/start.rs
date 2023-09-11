@@ -272,6 +272,7 @@ impl Release {
         };
 
         // figure out which rc comes next.
+        infoln!("Assess next release version...");
         let avail_versions = self.get_release_versions(&relver);
         let next_rc = match avail_versions.last_key_value() {
             None => 1_u64,
@@ -288,7 +289,10 @@ impl Release {
         let mut next_ver = relver.clone();
         next_ver.rc = Some(next_rc);
 
-        log::info!("Start next release candidate '{}': {}", next_rc, next_ver);
+        infoln!(format!(
+            "Start next release candidate '{}': {}",
+            next_rc, next_ver
+        ));
 
         // start release candidate on the various repositories, except
         // 's3gw.git'.
@@ -316,15 +320,16 @@ impl Release {
             },
         ];
 
+        infoln!("Tagging repositories...");
         for entry in &mut submodules {
-            log::info!(
+            log::debug!(
                 "Tagging repository '{}' with version '{}'",
                 entry.repo.name,
                 next_ver
             );
             let (tag_name, tag_oid) = match entry.repo.tag_release_branch(&relver, &next_ver) {
                 Ok((tag_name, tag_oid)) => {
-                    log::info!(
+                    log::debug!(
                         "Tagged version '{}' with '{}' oid {} name {}",
                         relver,
                         next_ver,
@@ -334,7 +339,10 @@ impl Release {
                     (tag_name, tag_oid)
                 }
                 Err(()) => {
-                    log::error!("Error tagging version '{}' with '{}'", relver, next_ver);
+                    errorln!(format!(
+                        "Error tagging version '{}' with '{}'",
+                        relver, next_ver
+                    ));
                     return Err(ReleaseError::UnknownError);
                 }
             };
@@ -344,14 +352,18 @@ impl Release {
 
         // repositories have been tagged -- push them out so we can update the
         // submodules on 's3gw.git'.
+        infoln!("Pushing repositories...");
         for entry in &submodules {
-            log::info!("Pushing '{}' to repository '{}'", relver, entry.name);
+            log::debug!("Pushing '{}' to repository '{}'", relver, entry.name);
             match entry.repo.push_release_branch(&relver) {
                 Ok(()) => {
-                    log::info!("Pushed '{}' to repository '{}'", relver, entry.name);
+                    log::debug!("Pushed '{}' to repository '{}'", relver, entry.name);
                 }
                 Err(()) => {
-                    log::error!("Error pushing '{}' to repository '{}'!", relver, entry.name);
+                    errorln!(format!(
+                        "Error pushing '{}' to repository '{}'!",
+                        relver, entry.name
+                    ));
                     return Err(ReleaseError::UnknownError);
                 }
             };
@@ -362,14 +374,13 @@ impl Release {
 
             match entry.repo.push_release_tag(&next_ver) {
                 Ok(()) => {
-                    log::info!("Pushed '{}' to repository '{}'!", next_ver, entry.name);
+                    log::debug!("Pushed '{}' to repository '{}'!", next_ver, entry.name);
                 }
                 Err(()) => {
-                    log::error!(
+                    errorln!(format!(
                         "Error pushing '{}' to repository '{}'!",
-                        next_ver,
-                        entry.name
-                    );
+                        next_ver, entry.name
+                    ));
                     return Err(ReleaseError::UnknownError);
                 }
             };
@@ -379,10 +390,11 @@ impl Release {
 
         // update submodules on 's3gw.git' to reflect the current state of each
         // repository.
+        infoln!("Updating submodules...");
         for entry in &submodules {
             let tag_name = match &entry.tag_name {
                 None => {
-                    log::error!("Tag name for submodule '{}' not set!", entry.name);
+                    errorln!(format!("Tag name for submodule '{}' not set!", entry.name));
                     return Err(ReleaseError::UnknownError);
                 }
                 Some(n) => n,
@@ -394,17 +406,18 @@ impl Release {
                 .set_submodule_head(&entry.name, &tag_name, true)
             {
                 Ok(p) => {
-                    log::info!("Updated submodule '{}'", entry.name);
+                    log::debug!("Updated submodule '{}'", entry.name);
                     p
                 }
                 Err(()) => {
-                    log::error!("Error updating submodule '{}'", entry.name);
+                    errorln!(format!("Error updating submodule '{}'", entry.name));
                     return Err(ReleaseError::UnknownError);
                 }
             };
             paths_to_add.push(path);
         }
 
+        infoln!("Finalizing release...");
         if let Some(notes_file) = notes {
             // copy release notes file to its final destination.
             let release_notes_file = format!("s3gw-v{}.md", next_ver);
@@ -427,7 +440,7 @@ impl Release {
 
         match self.ws.repos.s3gw.stage_paths(&paths_to_add) {
             Ok(()) => {
-                log::info!(
+                log::debug!(
                     "Staged paths:\n{}",
                     paths_to_add
                         .iter()
@@ -444,43 +457,51 @@ impl Release {
 
         match self.ws.repos.s3gw.commit_release(&relver, &next_ver) {
             Ok(()) => {
-                log::info!("Committed release '{}' tag '{}'", relver, next_ver);
+                log::debug!("Committed release '{}' tag '{}'", relver, next_ver);
             }
             Err(()) => {
-                log::error!("Unable to commit release '{}' tag '{}'", relver, next_ver);
+                errorln!(format!(
+                    "Unable to commit release '{}' tag '{}'",
+                    relver, next_ver
+                ));
             }
         };
 
         // finally, push the branch and the release tag.
         match self.ws.repos.s3gw.push_release_branch(&relver) {
             Ok(()) => {
-                log::info!("Pushed s3gw release branch for '{}'", relver);
+                log::debug!("Pushed s3gw release branch for '{}'", relver);
             }
             Err(()) => {
-                log::error!("Error pushing s3gw release branch for '{}'", relver);
+                errorln!(format!(
+                    "Error pushing s3gw release branch for '{}'",
+                    relver
+                ));
                 return Err(ReleaseError::UnknownError);
             }
         };
 
         match self.ws.repos.s3gw.push_release_tag(&next_ver) {
             Ok(()) => {
-                log::info!(
+                log::debug!(
                     "Pushed s3gw release tag '{}' for version '{}'",
                     next_ver,
                     relver
                 );
             }
             Err(()) => {
-                log::error!(
+                errorln!(format!(
                     "Error pushing s3gw release tag '{}' for version '{}'",
-                    next_ver,
-                    relver
-                );
+                    next_ver, relver
+                ));
                 return Err(ReleaseError::UnknownError);
             }
         };
 
-        log::info!("Started release ver '{}' tag '{}'", relver, next_ver);
+        successln!(format!(
+            "Started release ver '{}' tag '{}'",
+            relver, next_ver
+        ));
         Ok(next_ver)
     }
 }
