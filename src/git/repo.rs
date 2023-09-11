@@ -378,7 +378,7 @@ impl GitRepo {
         Ok(refs)
     }
 
-    pub fn test_ssh(self: &Self) {
+    pub fn _test_ssh(self: &Self) {
         let mut remote = self.get_remote("rw").unwrap();
         let mut conn = match self.open_remote(&mut remote, git2::Direction::Fetch, true) {
             Ok(v) => v,
@@ -453,7 +453,7 @@ impl GitRepo {
         Ok(())
     }
 
-    pub fn find_branch(self: &Self, name: &String, is_remote: &bool) -> Result<git2::Branch, ()> {
+    pub fn _find_branch(self: &Self, name: &String, is_remote: &bool) -> Result<git2::Branch, ()> {
         match self.repo.find_branch(
             &name.as_str(),
             match is_remote {

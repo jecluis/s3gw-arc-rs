@@ -51,13 +51,6 @@ impl GitRefEntry {
     }
 }
 
-pub struct GitRefs {
-    pub branches: Vec<GitRefEntry>,
-    pub tags: Vec<GitRefEntry>,
-}
-
-impl GitRefs {}
-
 /// Obtain head references from a remote.
 ///
 pub fn get_refs_from_remote(remote: &git2::Remote) -> Result<Vec<GitRefEntry>, ()> {

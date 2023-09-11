@@ -324,7 +324,9 @@ impl Repository {
         Ok(res)
     }
 
-    pub fn get_version_tree(self: &Self) -> Result<BTreeMap<u64, super::version::BaseVersion>, ()> {
+    pub fn _get_version_tree(
+        self: &Self,
+    ) -> Result<BTreeMap<u64, super::version::BaseVersion>, ()> {
         let branch_re = regex::Regex::new(&self.config.branch_pattern).expect(
             format!(
                 "potentially malformed branch pattern '{}'",
@@ -441,8 +443,8 @@ impl Repository {
         Ok(version_tree)
     }
 
-    pub fn print_version_tree(self: &Self) {
-        let tree = match self.get_version_tree() {
+    pub fn _print_version_tree(self: &Self) {
+        let tree = match self._get_version_tree() {
             Ok(t) => t,
             Err(()) => {
                 log::error!("Unable to print version tree for '{}'", self.name);
@@ -613,7 +615,7 @@ impl Repository {
         }
     }
 
-    pub fn test_ssh(self: &Self) {
+    pub fn _test_ssh(self: &Self) {
         let git = match git::repo::GitRepo::open(&self.path) {
             Ok(v) => v,
             Err(()) => {
@@ -625,7 +627,7 @@ impl Repository {
             }
         };
 
-        git.test_ssh();
+        git._test_ssh();
     }
 
     pub fn branch_from_default(self: &Self, dst: &Version) -> Result<(), ()> {
@@ -696,7 +698,7 @@ impl Repository {
             }
         };
 
-        let branch = match git.find_branch(&branch_name, &is_remote) {
+        let _branch = match git._find_branch(&branch_name, &is_remote) {
             Ok(b) => b,
             Err(()) => {
                 log::error!("Error obtaining branch '{}'", branch_name);

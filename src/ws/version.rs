@@ -29,12 +29,14 @@ pub struct ReleaseVersion {
     pub versions: Vec<Version>,
 }
 
+#[allow(dead_code)]
 pub struct ReleaseDesc {
     pub release: Version,
     pub versions: BTreeMap<u64, Version>,
     pub is_complete: bool,
 }
 
+#[allow(dead_code)]
 pub struct BaseVersion {
     pub version: Version,
     pub releases: BTreeMap<u64, ReleaseDesc>,

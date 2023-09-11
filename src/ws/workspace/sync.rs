@@ -17,6 +17,7 @@ use crate::ws::repository::Repository;
 use super::Workspace;
 
 struct SyncRepo<'a> {
+    #[allow(dead_code)]
     pub name: String,
     pub update_submodules: bool,
     pub repo: &'a Repository,

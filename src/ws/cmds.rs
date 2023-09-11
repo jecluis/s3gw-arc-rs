@@ -42,6 +42,7 @@ pub fn handle_cmds(cmd: &Cmds) {
             };
             return;
         }
+        #[allow(unreachable_patterns)]
         _ => {}
     }
 
@@ -52,7 +53,7 @@ pub fn handle_cmds(cmd: &Cmds) {
             return;
         }
     };
-    let ws = match super::init::open(&path) {
+    let _ws = match super::init::open(&path) {
         Ok(v) => v,
         Err(_) => {
             log::error!("Unable to open workspace at {}", path.display());

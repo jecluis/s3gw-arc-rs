@@ -20,6 +20,7 @@ mod sync;
 
 pub struct Workspace {
     path: PathBuf,
+    #[allow(dead_code)]
     config: WSConfig,
     pub repos: Repos,
 }

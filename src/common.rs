@@ -65,6 +65,7 @@ macro_rules! successln {
 }
 
 pub struct RepoSyncProgress {
+    #[allow(dead_code)]
     name: String,
     bars: MultiProgress,
 
