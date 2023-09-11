@@ -442,6 +442,36 @@ impl Release {
             }
         };
 
-        Err(ReleaseError::UnknownError)
+        // finally, push the branch and the release tag.
+        match self.ws.repos.s3gw.push_release_branch(&relver) {
+            Ok(()) => {
+                log::info!("Pushed s3gw release branch for '{}'", relver);
+            }
+            Err(()) => {
+                log::error!("Error pushing s3gw release branch for '{}'", relver);
+                return Err(ReleaseError::UnknownError);
+            }
+        };
+
+        match self.ws.repos.s3gw.push_release_tag(&next_ver) {
+            Ok(()) => {
+                log::info!(
+                    "Pushed s3gw release tag '{}' for version '{}'",
+                    next_ver,
+                    relver
+                );
+            }
+            Err(()) => {
+                log::error!(
+                    "Error pushing s3gw release tag '{}' for version '{}'",
+                    next_ver,
+                    relver
+                );
+                return Err(ReleaseError::UnknownError);
+            }
+        };
+
+        log::info!("Started release ver '{}' tag '{}'", relver, next_ver);
+        Ok(next_ver)
     }
 }
