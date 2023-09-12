@@ -14,7 +14,7 @@
 
 use std::path::PathBuf;
 
-use crate::{boomln, errorln, successln};
+use crate::{boomln, errorln, infoln, successln};
 
 #[derive(clap::Subcommand)]
 pub enum Cmds {
@@ -28,6 +28,8 @@ pub enum Cmds {
     Init(InitCommand),
     /// Start a new release process.
     Start(StartCommand),
+    /// Continue the release process.
+    Continue(ContinueCommand),
 }
 
 #[derive(clap::Args)]
@@ -46,6 +48,9 @@ pub struct StartCommand {
     #[arg(value_name = "FILE", short, long)]
     notes: PathBuf,
 }
+
+#[derive(clap::Args)]
+pub struct ContinueCommand {}
 
 pub fn handle_cmds(cmd: &Cmds) {
     let path = match std::env::current_dir() {
@@ -66,17 +71,22 @@ pub fn handle_cmds(cmd: &Cmds) {
     match cmd {
         Cmds::List => {
             log::debug!("List existing releases");
-            crate::release::Release::list(&ws);
+            match crate::release::Release::list(&ws) {
+                Ok(()) => {}
+                Err(()) => {
+                    boomln!("Unable to list releases!");
+                }
+            };
             return;
         }
         Cmds::Init(cmd) => {
             log::debug!("Init release");
             match crate::release::Release::init(ws, &cmd.release) {
                 Ok(release) => {
-                    println!("Release {} init'ed.", release.get_version());
+                    successln!(format!("Release {} init'ed.", release.get_version()));
                 }
                 Err(e) => {
-                    log::error!("Error init'ing release: {:?}", e);
+                    errorln!(format!("Error init'ing release: {:?}", e));
                 }
             };
             return;
@@ -105,7 +115,7 @@ pub fn handle_cmds(cmd: &Cmds) {
                 "Start a new release process for version {}",
                 start_cmd.version
             );
-            let version = match crate::ws::version::Version::from_str(&start_cmd.version) {
+            let version = match crate::version::Version::from_str(&start_cmd.version) {
                 Ok(v) => v,
                 Err(_) => {
                     log::error!("Error parsing provided version!");
@@ -143,6 +153,25 @@ pub fn handle_cmds(cmd: &Cmds) {
                 }
                 Err(()) => {
                     boomln!("Error starting new release!");
+                }
+            };
+        }
+        Cmds::Continue(_) => {
+            let relver = match &release.state {
+                None => {
+                    boomln!("Release state not found!");
+                    infoln!("Maybe you want to init the release first?");
+                    return;
+                }
+                Some(s) => s.release_version.clone(),
+            };
+            infoln!(format!("Continue a release process for version {}", relver));
+            match &release.cont() {
+                Ok(()) => {
+                    successln!(format!("Release {} successfully continued.", relver));
+                }
+                Err(()) => {
+                    boomln!("Error continuing release.");
                 }
             };
         }

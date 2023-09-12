@@ -14,11 +14,12 @@
 
 use std::path::PathBuf;
 
+use crate::version::Version;
 use crate::{
     boomln, errorln, infoln,
     release::{errors::ReleaseError, ReleaseState},
     successln, warnln,
-    ws::{repository::Repository, version::Version},
+    ws::repository::Repository,
 };
 
 use super::Release;
@@ -176,7 +177,7 @@ impl Release {
         self: &Self,
         version: &Version,
     ) -> Result<Option<Vec<&Repository>>, ReleaseError> {
-        let repos = self.ws.repos.as_list();
+        let repos = self.ws.repos.as_vec();
         let base_version = version.get_base_version();
         let base_version_id = base_version.get_version_id();
 

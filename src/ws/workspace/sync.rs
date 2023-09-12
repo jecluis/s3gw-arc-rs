@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::ws::repository::Repository;
+use crate::{infoln, ws::repository::Repository};
 
 use super::Workspace;
 
@@ -51,6 +51,7 @@ impl Workspace {
             },
         ];
 
+        infoln!("Synchronize workspace...");
         for entry in repos {
             match entry.repo.sync(entry.update_submodules) {
                 Ok(_) => {}

@@ -14,8 +14,8 @@
 
 pub mod cmds;
 pub mod config;
+pub mod errors;
 pub mod init;
 mod prompt;
 pub mod repository;
-pub mod version;
 pub mod workspace;

@@ -14,10 +14,12 @@
 
 use std::path::PathBuf;
 
-use crate::ws::{version::Version, workspace::Workspace};
+use crate::version::Version;
+use crate::ws::workspace::Workspace;
 
 pub mod cmds;
 mod common;
+mod cont;
 pub mod errors;
 mod init;
 mod list;

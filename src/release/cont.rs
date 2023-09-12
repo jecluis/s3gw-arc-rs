@@ -15,23 +15,7 @@
 use super::Release;
 
 impl Release {
-    pub fn status(self: &Self) {
-        log::debug!("Show release status");
-
-        if self.state.is_none() {
-            println!("Release not defined");
-            return;
-        }
-
-        match self.ws.sync() {
-            Ok(_) => {}
-            Err(_) => {
-                log::error!("Error synchronizing workspace!");
-                return;
-            }
-        };
-
-        let state = self.state.as_ref().unwrap();
-        println!("Release version: {}", state.release_version);
+    pub fn cont(self: &mut Self) -> Result<(), ()> {
+        Ok(())
     }
 }

@@ -14,9 +14,11 @@
 
 use inquire::{Confirm, Text};
 
+use crate::version::Version;
 use crate::{
+    boomln, errorln, infoln,
     release::{ReleaseError, ReleaseState},
-    ws::{version::Version, workspace::Workspace},
+    ws::workspace::Workspace,
 };
 
 use super::Release;
@@ -28,17 +30,17 @@ impl Release {
         let mut release = match Release::open(ws) {
             Ok(v) => v,
             Err(_) => {
-                log::error!("Error opening release, unable to init!");
+                boomln!("Error opening release, unable to init!");
                 return Err(ReleaseError::InitError);
             }
         };
 
         if let Some(state) = release.state {
-            log::error!("Workspace already has a release initiated!");
-            println!(
+            errorln!("Workspace already has a release initiated!");
+            infoln!(format!(
                 "Workspace already initiated for release {}.",
                 state.release_version
-            );
+            ));
             return Err(ReleaseError::AlreadyInit);
         }
 
@@ -46,7 +48,7 @@ impl Release {
             match Version::from_str(&v) {
                 Ok(r) => r,
                 Err(_) => {
-                    log::error!("Unable to parse provided version string!");
+                    boomln!("Unable to parse provided version string!");
                     return Err(ReleaseError::InitError);
                 }
             }
@@ -54,7 +56,7 @@ impl Release {
             match init_prompt() {
                 Ok(v) => v,
                 Err(_) => {
-                    log::error!("Unable to init release!");
+                    boomln!("Unable to init release!");
                     return Err(ReleaseError::InitError);
                 }
             }
@@ -65,15 +67,15 @@ impl Release {
         match release.ws.sync() {
             Ok(_) => {}
             Err(_) => {
-                log::error!("Error synchronizing workspace!");
+                boomln!("Error synchronizing workspace!");
                 return Err(ReleaseError::InitError);
             }
         };
 
-        let release_versions = match release.ws.repos.s3gw.get_release_versions() {
+        let release_versions = match release.ws.repos.s3gw._get_release_versions() {
             Ok(v) => v,
             Err(_) => {
-                log::error!("Unable to obtain release versions for s3gw repo");
+                boomln!("Unable to obtain release versions for s3gw repo");
                 return Err(ReleaseError::InitError);
             }
         };
@@ -102,7 +104,7 @@ impl Release {
         match release.write() {
             Ok(_) => {}
             Err(_) => {
-                log::error!("Unable to write release state!");
+                boomln!("Unable to write release state!");
                 return Err(ReleaseError::InitError);
             }
         };
@@ -112,12 +114,12 @@ impl Release {
 
 fn init_prompt() -> Result<Version, ReleaseError> {
     let version_str = match Text::new("release version:")
-        .with_help_message("MAJOR.minor; e.g., 0.17")
+        .with_help_message("MAJOR.minor.patch; e.g., 0.17.0")
         .with_validator(|v: &str| match Version::from_str(&String::from(v)) {
             Ok(r) => {
-                if r.patch.is_some() || r.rc.is_some() {
+                if r.rc.is_some() || r.patch.is_none() {
                     Ok(inquire::validator::Validation::Invalid(
-                        "must be in MAJOR.minor format".into(),
+                        "must be in MAJOR.minor.patch format".into(),
                     ))
                 } else {
                     Ok(inquire::validator::Validation::Valid)
@@ -139,7 +141,7 @@ fn init_prompt() -> Result<Version, ReleaseError> {
     match Version::from_str(&version_str) {
         Ok(v) => Ok(v),
         Err(_) => {
-            log::error!("Unable to obtain version from '{}'", version_str);
+            errorln!(format!("Unable to obtain version from '{}'", version_str));
             return Err(ReleaseError::InitError);
         }
     }
@@ -152,7 +154,7 @@ fn prompt_release_exists() -> Result<bool, ()> {
     {
         Ok(v) => Ok(v),
         Err(e) => {
-            log::error!("Error prompting user: {}", e);
+            errorln!(format!("Error prompting user: {}", e));
             return Err(());
         }
     }

@@ -12,26 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::Release;
+use std::fmt::Display;
 
-impl Release {
-    pub fn status(self: &Self) {
-        log::debug!("Show release status");
+#[derive(Clone, Copy)]
+pub enum RepositoryError {
+    UnableToOpenRepositoryError,
+    UnableToGetReferencesError,
+    #[allow(dead_code)]
+    UnknownError,
+}
 
-        if self.state.is_none() {
-            println!("Release not defined");
-            return;
-        }
-
-        match self.ws.sync() {
-            Ok(_) => {}
-            Err(_) => {
-                log::error!("Error synchronizing workspace!");
-                return;
-            }
-        };
-
-        let state = self.state.as_ref().unwrap();
-        println!("Release version: {}", state.release_version);
+impl Display for RepositoryError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            RepositoryError::UnableToOpenRepositoryError => "unable to open repository",
+            RepositoryError::UnableToGetReferencesError => "unable to obtain git references",
+            RepositoryError::UnknownError => "unknown error",
+        })
     }
 }

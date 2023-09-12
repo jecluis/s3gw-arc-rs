@@ -14,7 +14,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::ws::version::Version;
+use crate::version::Version;
 
 use super::Release;
 

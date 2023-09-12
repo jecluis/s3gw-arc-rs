@@ -18,10 +18,11 @@ use std::{
 };
 
 use crate::git::{self, refs::GitRefEntry};
+use crate::{boomln, version::Version};
 
 use super::{
     config::{WSGitRepoConfigValues, WSGitReposConfig, WSUserConfig},
-    version::Version,
+    errors::RepositoryError,
 };
 
 pub struct Repository {
@@ -89,7 +90,7 @@ impl Repos {
         })
     }
 
-    pub fn as_list(self: &Self) -> Vec<&Repository> {
+    pub fn as_vec(self: &Self) -> Vec<&Repository> {
         vec![&self.s3gw, &self.ui, &self.charts, &self.ceph]
     }
 }
@@ -193,7 +194,7 @@ impl Repository {
         Ok(())
     }
 
-    pub fn get_release_versions(self: &Self) -> Result<Vec<super::version::ReleaseVersion>, ()> {
+    pub fn _get_release_versions(self: &Self) -> Result<Vec<crate::version::ReleaseVersion>, ()> {
         let git = match git::repo::GitRepo::open(&self.path) {
             Ok(v) => v,
             Err(_) => {
@@ -212,7 +213,7 @@ impl Repository {
             }
         };
 
-        let mut versions: HashMap<String, Vec<super::version::Version>> = HashMap::new();
+        let mut versions: HashMap<String, Vec<Version>> = HashMap::new();
 
         let branch_re = regex::Regex::new(&self.config.branch_pattern).expect(
             format!(
@@ -279,7 +280,7 @@ impl Repository {
                 let version_str = String::from(version_raw.as_str());
                 log::trace!("  version: {}", version_str);
 
-                let version = match super::version::Version::from_str(&version_str) {
+                let version = match Version::from_str(&version_str) {
                     Ok(v) => v,
                     Err(_) => {
                         log::debug!("Unable to parse version from '{}' - skip.", version_str);
@@ -302,10 +303,10 @@ impl Repository {
             }
         }
 
-        let mut res: Vec<super::version::ReleaseVersion> = vec![];
+        let mut res: Vec<crate::version::ReleaseVersion> = vec![];
         for entry in versions {
             let rel_str = entry.0;
-            let rel_ver = match super::version::Version::from_str(&rel_str) {
+            let rel_ver = match Version::from_str(&rel_str) {
                 Ok(v) => v,
                 Err(_) => {
                     log::error!("Unable to parse version from '{}'", rel_str);
@@ -313,20 +314,26 @@ impl Repository {
                 }
             };
             let mut version_vec = entry.1.to_vec();
-            version_vec.sort_by_key(|e: &super::version::Version| e.get_version_id());
-            res.push(super::version::ReleaseVersion {
+            version_vec.sort_by_key(|e: &Version| e.get_version_id());
+            res.push(crate::version::ReleaseVersion {
                 release_version: rel_ver,
                 versions: version_vec,
             });
         }
-        res.sort_by_key(|e: &super::version::ReleaseVersion| e.release_version.get_version_id());
+        res.sort_by_key(|e: &crate::version::ReleaseVersion| e.release_version.get_version_id());
 
         Ok(res)
     }
 
-    pub fn _get_version_tree(
+    /// Obtain releases. Returns a tree ordered by release ID, each value
+    /// referring to a base release version (i.e., 0.99), containing another
+    /// tree of release versions (i.e., 0.99.0) associated with said base version.
+    /// Each release version entry will have an associated tree of versions
+    /// (i.e., 0.99.0, 0.99.0-rc1, ...).
+    ///
+    pub fn get_releases(
         self: &Self,
-    ) -> Result<BTreeMap<u64, super::version::BaseVersion>, ()> {
+    ) -> Result<BTreeMap<u64, crate::version::BaseVersion>, RepositoryError> {
         let branch_re = regex::Regex::new(&self.config.branch_pattern).expect(
             format!(
                 "potentially malformed branch pattern '{}'",
@@ -345,8 +352,11 @@ impl Repository {
         let git = match git::repo::GitRepo::open(&self.path) {
             Ok(v) => v,
             Err(()) => {
-                log::error!("Unable to open git repository at '{}'", self.path.display());
-                return Err(());
+                boomln!(format!(
+                    "Unable to open git repository at '{}'",
+                    self.path.display()
+                ));
+                return Err(RepositoryError::UnableToOpenRepositoryError);
             }
         };
         let refs = match git.get_refs() {
@@ -356,22 +366,24 @@ impl Repository {
                     "Unable to obtain refs for repository at '{}'",
                     self.path.display()
                 );
-                return Err(());
+                return Err(RepositoryError::UnableToGetReferencesError);
             }
         };
 
-        let mut version_tree: BTreeMap<u64, super::version::BaseVersion> = BTreeMap::new();
+        let mut version_tree: BTreeMap<u64, crate::version::BaseVersion> = BTreeMap::new();
         let branch_refs: Vec<&git::refs::GitRefEntry> =
             refs.iter().filter(|e| e.is_branch()).collect();
         let tag_refs: Vec<&git::refs::GitRefEntry> = refs.iter().filter(|e| e.is_tag()).collect();
 
+        // populate tree with all the existing releases -- i.e., all the git
+        // refs that match this repository's branch pattern.
         for branch in branch_refs {
             log::trace!("branch '{}' oid {}", branch.name, branch.oid);
             if let Some(m) = branch_re.captures(&branch.name) {
                 assert_eq!(m.len(), 2);
 
                 let version = if let Some(v) = m.get(1) {
-                    super::version::Version::from_str(&String::from(v.as_str())).unwrap()
+                    Version::from_str(&String::from(v.as_str())).unwrap()
                 } else {
                     log::trace!("  not a match - skip.");
                     continue;
@@ -380,7 +392,7 @@ impl Repository {
                 if !version_tree.contains_key(&verid) {
                     version_tree.insert(
                         verid,
-                        crate::ws::version::BaseVersion {
+                        crate::version::BaseVersion {
                             version,
                             releases: BTreeMap::new(),
                         },
@@ -389,13 +401,16 @@ impl Repository {
             }
         }
 
+        // for each git ref matching this repository's tag format, add it to the
+        // corresponding release entry. Skip a tag if its expected release is
+        // not found in the version tree.
         for tag in tag_refs {
             log::trace!("tag '{}' oid {}", tag.name, tag.oid);
             if let Some(m) = tag_re.captures(&tag.name) {
                 assert_eq!(m.len(), 2);
 
                 let version = if let Some(v) = m.get(1) {
-                    match super::version::Version::from_str(&String::from(v.as_str())) {
+                    match Version::from_str(&String::from(v.as_str())) {
                         Ok(ver) => ver,
                         Err(()) => {
                             log::debug!("unable to parse version '{}' - skip.", v.as_str());
@@ -423,7 +438,7 @@ impl Repository {
                 if !base_version.releases.contains_key(&release_ver_id) {
                     base_version.releases.insert(
                         release_ver_id,
-                        crate::ws::version::ReleaseDesc {
+                        crate::version::ReleaseEntry {
                             release: release_ver.clone(),
                             versions: BTreeMap::new(),
                             is_complete: false,
@@ -431,12 +446,12 @@ impl Repository {
                     );
                 }
 
-                let version_desc_tree = base_version.releases.get_mut(&release_ver_id).unwrap();
+                let version_entry_tree = base_version.releases.get_mut(&release_ver_id).unwrap();
                 let version_id = version.get_version_id();
                 if version.rc.is_none() {
-                    version_desc_tree.is_complete = true;
+                    version_entry_tree.is_complete = true;
                 }
-                version_desc_tree.versions.insert(version_id, version);
+                version_entry_tree.versions.insert(version_id, version);
             }
         }
 
@@ -444,10 +459,10 @@ impl Repository {
     }
 
     pub fn _print_version_tree(self: &Self) {
-        let tree = match self._get_version_tree() {
+        let tree = match self.get_releases() {
             Ok(t) => t,
-            Err(()) => {
-                log::error!("Unable to print version tree for '{}'", self.name);
+            Err(err) => {
+                log::error!("Unable to print version tree for '{}': {}", self.name, err);
                 return;
             }
         };
@@ -588,7 +603,7 @@ impl Repository {
         }
     }
 
-    pub fn _find_version(self: &Self, version: &super::version::Version) -> Result<(), ()> {
+    pub fn _find_version(self: &Self, version: &Version) -> Result<(), ()> {
         let ver_id = version.get_version_id();
         let base_ver = version.get_base_version();
         let base_ver_id = base_ver.get_version_id();

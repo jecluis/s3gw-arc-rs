@@ -16,6 +16,7 @@ mod args;
 mod common;
 mod git;
 mod release;
+mod version;
 mod ws;
 
 #[tokio::main]
