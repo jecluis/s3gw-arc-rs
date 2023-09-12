@@ -12,10 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{
-    collections::{BTreeMap, HashMap},
-    path::PathBuf,
-};
+use std::{collections::BTreeMap, path::PathBuf};
 
 use crate::git::{self, refs::GitRefEntry};
 use crate::{boomln, version::Version};
@@ -192,137 +189,6 @@ impl Repository {
         };
 
         Ok(())
-    }
-
-    pub fn _get_release_versions(self: &Self) -> Result<Vec<crate::version::ReleaseVersion>, ()> {
-        let git = match git::repo::GitRepo::open(&self.path) {
-            Ok(v) => v,
-            Err(_) => {
-                log::error!("Unable to open git repository at '{}'", self.path.display());
-                return Err(());
-            }
-        };
-        let refs = match git.get_refs() {
-            Ok(v) => v,
-            Err(_) => {
-                log::error!(
-                    "Unable to obtain refs for repository '{}'",
-                    self.path.display()
-                );
-                return Err(());
-            }
-        };
-
-        let mut versions: HashMap<String, Vec<Version>> = HashMap::new();
-
-        let branch_re = regex::Regex::new(&self.config.branch_pattern).expect(
-            format!(
-                "potentially malformed branch pattern '{}'",
-                self.config.branch_pattern
-            )
-            .as_str(),
-        );
-        let tag_re = regex::Regex::new(&self.config.tag_pattern).expect(
-            format!(
-                "potentially malformed tag pattern '{}'",
-                self.config.tag_pattern
-            )
-            .as_str(),
-        );
-
-        let branch_refs: Vec<&git::refs::GitRefEntry> =
-            refs.iter().filter(|e| e.is_branch()).collect();
-        let tag_refs: Vec<&git::refs::GitRefEntry> = refs.iter().filter(|e| e.is_tag()).collect();
-
-        log::trace!("--------- branches ----------");
-        log::trace!(" total: {}", branch_refs.len());
-        for branch in &branch_refs {
-            log::trace!(
-                " > {} (oid: {}), remote: {}",
-                branch.name,
-                branch.oid,
-                branch.is_remote
-            );
-        }
-
-        for branch in branch_refs {
-            log::trace!("branch '{}' oid {}", branch.name, branch.oid);
-            if let Some(m) = branch_re.captures(&branch.name) {
-                assert_eq!(m.len(), 2);
-                log::trace!("  matches");
-
-                let version = match m.get(1) {
-                    None => {
-                        continue;
-                    }
-                    Some(v) => v,
-                };
-                let version_str = String::from(version.as_str());
-                log::trace!("  version: {}", version_str);
-                if !versions.contains_key(&version_str) {
-                    versions.insert(version_str, vec![]);
-                }
-            }
-        }
-
-        for tag in tag_refs {
-            log::trace!("tag '{}' oid {}", tag.name, tag.oid);
-            if let Some(m) = tag_re.captures(&tag.name) {
-                assert_eq!(m.len(), 2);
-                log::trace!("  matches");
-
-                let version_raw = match m.get(1) {
-                    None => {
-                        continue;
-                    }
-                    Some(v) => v,
-                };
-                let version_str = String::from(version_raw.as_str());
-                log::trace!("  version: {}", version_str);
-
-                let version = match Version::from_str(&version_str) {
-                    Ok(v) => v,
-                    Err(_) => {
-                        log::debug!("Unable to parse version from '{}' - skip.", version_str);
-                        continue;
-                    }
-                };
-
-                let relversion_str = version.get_base_version_str();
-                if !versions.contains_key(&relversion_str) {
-                    log::trace!(
-                        "Unable to find release '{}' for version '{}'",
-                        relversion_str,
-                        version_str
-                    );
-                    continue;
-                }
-                let rel = versions.get_mut(&relversion_str).unwrap();
-                rel.push(version);
-                log::trace!("  added to release {}", relversion_str);
-            }
-        }
-
-        let mut res: Vec<crate::version::ReleaseVersion> = vec![];
-        for entry in versions {
-            let rel_str = entry.0;
-            let rel_ver = match Version::from_str(&rel_str) {
-                Ok(v) => v,
-                Err(_) => {
-                    log::error!("Unable to parse version from '{}'", rel_str);
-                    return Err(());
-                }
-            };
-            let mut version_vec = entry.1.to_vec();
-            version_vec.sort_by_key(|e: &Version| e.get_version_id());
-            res.push(crate::version::ReleaseVersion {
-                release_version: rel_ver,
-                versions: version_vec,
-            });
-        }
-        res.sort_by_key(|e: &crate::version::ReleaseVersion| e.release_version.get_version_id());
-
-        Ok(res)
     }
 
     /// Obtain releases. Returns a tree ordered by release ID, each value

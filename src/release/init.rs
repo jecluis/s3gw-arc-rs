@@ -15,12 +15,9 @@
 use inquire::{Confirm, Text};
 
 use crate::version::Version;
-use crate::{
-    boomln, errorln, infoln,
-    release::{ReleaseError, ReleaseState},
-    ws::workspace::Workspace,
-};
+use crate::{boomln, errorln, infoln, release::ReleaseState, ws::workspace::Workspace};
 
+use super::errors::ReleaseError;
 use super::Release;
 
 impl Release {
@@ -72,30 +69,24 @@ impl Release {
             }
         };
 
-        let release_versions = match release.ws.repos.s3gw._get_release_versions() {
-            Ok(v) => v,
-            Err(_) => {
-                boomln!("Unable to obtain release versions for s3gw repo");
-                return Err(ReleaseError::InitError);
-            }
-        };
-
-        for ver in release_versions {
-            if ver.release_version == version {
-                log::debug!("Release already exists!");
-                match prompt_release_exists() {
-                    Ok(true) => {
-                        break;
-                    }
-                    Ok(false) => {
-                        log::debug!("abort release init!");
-                        return Err(ReleaseError::UserAborted);
-                    }
-                    Err(_) => {
-                        return Err(ReleaseError::InitError);
-                    }
-                };
-            }
+        let release_versions = release.get_release_versions(&version);
+        if release_versions.contains_key(&version.get_version_id()) {
+            errorln!("Release version already exists!");
+            return Err(ReleaseError::ReleaseExistsError);
+        } else if release_versions.len() > 0 {
+            infoln!("Release has been started but not yet finished.");
+            match prompt_release_exists() {
+                Ok(true) => {}
+                Ok(false) => {
+                    errorln!("Abort init!");
+                    return Err(ReleaseError::UserAbortedError);
+                }
+                Err(()) => {
+                    boomln!("Error prompting user");
+                    return Err(ReleaseError::UnknownError);
+                }
+            };
+            // TODO(joao): must obtain existing release branches and check them out.
         }
 
         release.state = Some(ReleaseState {
@@ -114,12 +105,12 @@ impl Release {
 
 fn init_prompt() -> Result<Version, ReleaseError> {
     let version_str = match Text::new("release version:")
-        .with_help_message("MAJOR.minor.patch; e.g., 0.17.0")
+        .with_help_message("major.minor.patch; e.g., 0.17.0")
         .with_validator(|v: &str| match Version::from_str(&String::from(v)) {
             Ok(r) => {
                 if r.rc.is_some() || r.patch.is_none() {
                     Ok(inquire::validator::Validation::Invalid(
-                        "must be in MAJOR.minor.patch format".into(),
+                        "must be in major.minor.patch format".into(),
                     ))
                 } else {
                     Ok(inquire::validator::Validation::Valid)
@@ -148,7 +139,7 @@ fn init_prompt() -> Result<Version, ReleaseError> {
 }
 
 fn prompt_release_exists() -> Result<bool, ()> {
-    match Confirm::new("Release already exists. Continue?")
+    match Confirm::new("Continue existing release?")
         .with_default(false)
         .prompt()
     {

@@ -24,11 +24,6 @@ pub struct Version {
     pub rc: Option<u64>,
 }
 
-pub struct ReleaseVersion {
-    pub release_version: Version,
-    pub versions: Vec<Version>,
-}
-
 pub struct ReleaseEntry {
     pub release: Version,
     pub versions: BTreeMap<u64, Version>,

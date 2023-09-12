@@ -26,13 +26,6 @@ mod list;
 mod start;
 mod status;
 
-#[derive(Debug, Copy, Clone)]
-pub enum ReleaseError {
-    UserAborted,
-    InitError,
-    AlreadyInit,
-}
-
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct ReleaseState {
     pub release_version: Version,
