@@ -14,93 +14,92 @@
 
 use inquire::{Confirm, Text};
 
+use crate::release::common::get_release_versions;
 use crate::version::Version;
 use crate::{boomln, errorln, infoln, release::ReleaseState, ws::workspace::Workspace};
 
 use super::errors::ReleaseError;
 use super::Release;
 
-impl Release {
-    /// Initiate a release in the given workspace.
-    ///
-    pub fn init(ws: Workspace, version_str: &Option<String>) -> Result<Release, ReleaseError> {
-        let mut release = match Release::open(ws) {
+/// Initiate a release in the given workspace.
+///
+pub fn init(ws: &Workspace, version_str: &Option<String>) -> Result<Release, ReleaseError> {
+    let mut release = match Release::open(ws.clone()) {
+        Ok(v) => v,
+        Err(_) => {
+            boomln!("Error opening release, unable to init!");
+            return Err(ReleaseError::InitError);
+        }
+    };
+
+    if let Some(state) = release.state {
+        errorln!("Workspace already has a release initiated!");
+        infoln!(format!(
+            "Workspace already initiated for release {}.",
+            state.release_version
+        ));
+        return Err(ReleaseError::AlreadyInit);
+    }
+
+    let version: Version = if let Some(v) = version_str {
+        match Version::from_str(&v) {
+            Ok(r) => r,
+            Err(_) => {
+                boomln!("Unable to parse provided version string!");
+                return Err(ReleaseError::InitError);
+            }
+        }
+    } else {
+        match init_prompt() {
             Ok(v) => v,
             Err(_) => {
-                boomln!("Error opening release, unable to init!");
+                boomln!("Unable to init release!");
                 return Err(ReleaseError::InitError);
             }
-        };
-
-        if let Some(state) = release.state {
-            errorln!("Workspace already has a release initiated!");
-            infoln!(format!(
-                "Workspace already initiated for release {}.",
-                state.release_version
-            ));
-            return Err(ReleaseError::AlreadyInit);
         }
+    };
 
-        let version: Version = if let Some(v) = version_str {
-            match Version::from_str(&v) {
-                Ok(r) => r,
-                Err(_) => {
-                    boomln!("Unable to parse provided version string!");
-                    return Err(ReleaseError::InitError);
-                }
-            }
-        } else {
-            match init_prompt() {
-                Ok(v) => v,
-                Err(_) => {
-                    boomln!("Unable to init release!");
-                    return Err(ReleaseError::InitError);
-                }
-            }
-        };
+    log::debug!("init version {}", version);
 
-        log::debug!("init version {}", version);
-
-        match release.ws.sync() {
-            Ok(_) => {}
-            Err(_) => {
-                boomln!("Error synchronizing workspace!");
-                return Err(ReleaseError::InitError);
-            }
-        };
-
-        let release_versions = release.get_release_versions(&version);
-        if release_versions.contains_key(&version.get_version_id()) {
-            errorln!("Release version already exists!");
-            return Err(ReleaseError::ReleaseExistsError);
-        } else if release_versions.len() > 0 {
-            infoln!("Release has been started but not yet finished.");
-            match prompt_release_exists() {
-                Ok(true) => {}
-                Ok(false) => {
-                    errorln!("Abort init!");
-                    return Err(ReleaseError::UserAbortedError);
-                }
-                Err(()) => {
-                    boomln!("Error prompting user");
-                    return Err(ReleaseError::UnknownError);
-                }
-            };
-            // TODO(joao): must obtain existing release branches and check them out.
+    match release.ws.sync() {
+        Ok(_) => {}
+        Err(_) => {
+            boomln!("Error synchronizing workspace!");
+            return Err(ReleaseError::InitError);
         }
+    };
 
-        release.state = Some(ReleaseState {
-            release_version: version,
-        });
-        match release.write() {
-            Ok(_) => {}
-            Err(_) => {
-                boomln!("Unable to write release state!");
-                return Err(ReleaseError::InitError);
+    let release_versions = get_release_versions(&ws, &version);
+    if release_versions.contains_key(&version.get_version_id()) {
+        errorln!("Release version already exists!");
+        return Err(ReleaseError::ReleaseExistsError);
+    } else if release_versions.len() > 0 {
+        infoln!("Release has been started but not yet finished.");
+        match prompt_release_exists() {
+            Ok(true) => {}
+            Ok(false) => {
+                errorln!("Abort init!");
+                return Err(ReleaseError::UserAbortedError);
+            }
+            Err(()) => {
+                boomln!("Error prompting user");
+                return Err(ReleaseError::UnknownError);
             }
         };
-        Ok(release)
+        // TODO(joao): must obtain existing release branches and check them out.
     }
+
+    release.state = Some(ReleaseState {
+        release_version: version,
+    });
+    match release.write() {
+        Ok(_) => {}
+        Err(_) => {
+            boomln!("Unable to write release state!");
+            return Err(ReleaseError::InitError);
+        }
+    };
+    Ok(release)
 }
 
 fn init_prompt() -> Result<Version, ReleaseError> {

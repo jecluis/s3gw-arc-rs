@@ -14,10 +14,21 @@
 
 use std::path::PathBuf;
 
-use super::{config::WSConfig, repository::Repos};
+use crate::infoln;
 
-mod sync;
+use super::{
+    config::WSConfig,
+    repository::{Repos, Repository},
+};
 
+struct SyncRepo<'a> {
+    #[allow(dead_code)]
+    pub name: String,
+    pub update_submodules: bool,
+    pub repo: &'a Repository,
+}
+
+#[derive(Clone)]
 pub struct Workspace {
     path: PathBuf,
     #[allow(dead_code)]
@@ -60,5 +71,45 @@ impl Workspace {
     /// Obtain config directory for this workspace
     pub fn get_config_dir(self: &Self) -> PathBuf {
         self.path.clone().join(".arc")
+    }
+
+    /// Synchronize the current workspace, showing progress bars for each
+    /// individual repository in the workspace.
+    ///
+    pub fn sync(self: &Self) -> Result<(), ()> {
+        let repos: Vec<SyncRepo> = vec![
+            SyncRepo {
+                name: "s3gw".into(),
+                update_submodules: true,
+                repo: &self.repos.s3gw,
+            },
+            SyncRepo {
+                name: "ui".into(),
+                update_submodules: false,
+                repo: &self.repos.ui,
+            },
+            SyncRepo {
+                name: "charts".into(),
+                update_submodules: false,
+                repo: &self.repos.charts,
+            },
+            SyncRepo {
+                name: "ceph".into(),
+                update_submodules: false,
+                repo: &self.repos.ceph,
+            },
+        ];
+
+        infoln!("Synchronize workspace...");
+        for entry in repos {
+            match entry.repo.sync(entry.update_submodules) {
+                Ok(_) => {}
+                Err(_) => {
+                    return Err(());
+                }
+            };
+        }
+
+        Ok(())
     }
 }

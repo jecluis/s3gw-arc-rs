@@ -24,7 +24,6 @@ pub mod errors;
 mod init;
 mod list;
 mod start;
-mod status;
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct ReleaseState {
@@ -120,5 +119,25 @@ impl Release {
         } else {
             String::from("unknown version")
         }
+    }
+
+    pub fn status(self: &Self) {
+        log::debug!("Show release status");
+
+        if self.state.is_none() {
+            println!("Release not defined");
+            return;
+        }
+
+        match self.ws.sync() {
+            Ok(_) => {}
+            Err(_) => {
+                log::error!("Error synchronizing workspace!");
+                return;
+            }
+        };
+
+        let state = self.state.as_ref().unwrap();
+        println!("Release version: {}", state.release_version);
     }
 }

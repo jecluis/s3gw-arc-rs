@@ -22,6 +22,7 @@ use super::{
     errors::RepositoryError,
 };
 
+#[derive(Clone)]
 pub struct Repository {
     pub name: String,
     pub path: PathBuf,
@@ -29,6 +30,7 @@ pub struct Repository {
     pub config: WSGitRepoConfigValues,
 }
 
+#[derive(Clone)]
 pub struct Repos {
     pub s3gw: Repository,
     pub ui: Repository,

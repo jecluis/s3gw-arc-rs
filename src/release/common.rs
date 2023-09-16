@@ -14,34 +14,30 @@
 
 use std::collections::BTreeMap;
 
-use crate::version::Version;
+use crate::{version::Version, ws::workspace::Workspace};
 
-use super::Release;
+pub fn get_release_versions(ws: &Workspace, relver: &Version) -> BTreeMap<u64, Version> {
+    let min_id = relver.min().get_version_id();
+    let max_id = relver.max().get_version_id();
 
-impl Release {
-    pub fn get_release_versions(self: &Self, relver: &Version) -> BTreeMap<u64, Version> {
-        let min_id = relver.min().get_version_id();
-        let max_id = relver.max().get_version_id();
+    // println!(
+    //     "v: {}, id: {}, min: {}, max: {}",
+    //     version,
+    //     version.get_version_id(),
+    //     min_id,
+    //     max_id
+    // );
 
-        // println!(
-        //     "v: {}, id: {}, min: {}, max: {}",
-        //     version,
-        //     version.get_version_id(),
-        //     min_id,
-        //     max_id
-        // );
+    let version_tree = ws.repos.s3gw.get_versions().unwrap();
+    let avail = version_tree.range((
+        std::ops::Bound::Included(min_id),
+        std::ops::Bound::Included(max_id),
+    ));
 
-        let version_tree = self.ws.repos.s3gw.get_versions().unwrap();
-        let avail = version_tree.range((
-            std::ops::Bound::Included(min_id),
-            std::ops::Bound::Included(max_id),
-        ));
-
-        let mut versions = BTreeMap::<u64, Version>::new();
-        for (vid, v) in avail {
-            versions.insert(vid.clone(), v.clone());
-        }
-
-        versions
+    let mut versions = BTreeMap::<u64, Version>::new();
+    for (vid, v) in avail {
+        versions.insert(vid.clone(), v.clone());
     }
+
+    versions
 }

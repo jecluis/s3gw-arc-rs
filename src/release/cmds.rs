@@ -14,7 +14,7 @@
 
 use std::path::PathBuf;
 
-use crate::{boomln, errorln, infoln, successln};
+use crate::{boomln, errorln, infoln, successln, warnln};
 
 #[derive(clap::Subcommand)]
 pub enum Cmds {
@@ -71,7 +71,7 @@ pub fn handle_cmds(cmd: &Cmds) {
     match cmd {
         Cmds::List => {
             log::debug!("List existing releases");
-            match crate::release::Release::list(&ws) {
+            match crate::release::list::list(&ws) {
                 Ok(()) => {}
                 Err(()) => {
                     boomln!("Unable to list releases!");
@@ -81,7 +81,7 @@ pub fn handle_cmds(cmd: &Cmds) {
         }
         Cmds::Init(cmd) => {
             log::debug!("Init release");
-            match crate::release::Release::init(ws, &cmd.release) {
+            match crate::release::init::init(&ws, &cmd.release) {
                 Ok(release) => {
                     successln!(format!("Release {} init'ed.", release.get_version()));
                 }
@@ -144,7 +144,20 @@ pub fn handle_cmds(cmd: &Cmds) {
                 };
             }
 
-            match release.start(&version, &start_cmd.notes) {
+            if let Some(s) = &release.state {
+                warnln!("On-going release detected!");
+                if s.release_version == version {
+                    infoln!("Maybe you want to 'continue' instead?");
+                } else {
+                    infoln!(format!(
+                        "Detected version {}, attempting to start {}!",
+                        s.release_version, version
+                    ));
+                }
+                return;
+            }
+
+            match crate::release::start::start(&mut release, &version, &start_cmd.notes) {
                 Ok(()) => {
                     successln!(format!(
                         "Release for version {} successfully started!",
