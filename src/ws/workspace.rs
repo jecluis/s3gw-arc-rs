@@ -22,7 +22,6 @@ use super::{
 };
 
 struct SyncRepo<'a> {
-    #[allow(dead_code)]
     pub name: String,
     pub update_submodules: bool,
     pub repo: &'a Repository,
@@ -31,8 +30,7 @@ struct SyncRepo<'a> {
 #[derive(Clone)]
 pub struct Workspace {
     path: PathBuf,
-    #[allow(dead_code)]
-    config: WSConfig,
+    _config: WSConfig,
     pub repos: Repos,
 }
 
@@ -63,7 +61,7 @@ impl Workspace {
 
         Ok(Workspace {
             path: path.to_path_buf(),
-            config: cfg,
+            _config: cfg,
             repos,
         })
     }
@@ -102,6 +100,11 @@ impl Workspace {
 
         infoln!("Synchronize workspace...");
         for entry in repos {
+            log::debug!(
+                "synchronize {} (update submodules: {})",
+                entry.name,
+                entry.update_submodules
+            );
             match entry.repo.sync(entry.update_submodules) {
                 Ok(_) => {}
                 Err(_) => {
