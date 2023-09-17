@@ -68,23 +68,13 @@ fn prompt_custom_github_repo_value(
     default_name: &str,
     default: &WSGitRepoConfigValues,
 ) -> Result<WSGitRepoConfigValues, ()> {
-    let mut repo = String::from(default_name);
-
-    if match Confirm::new(&format!("Set custom repo for {} on '{}'?", name, org))
-        .with_default(true)
+    let repo = match Text::new(&format!("{:7} at {} /", name, org))
+        .with_default(&default_name)
         .prompt()
     {
-        Ok(res) => res,
+        Ok(v) => v,
         Err(_) => return Err(()),
-    } {
-        repo = match Text::new(&format!("{} repository at '{}':", name, org))
-            .with_default(&default_name)
-            .prompt()
-        {
-            Ok(v) => v,
-            Err(_) => return Err(()),
-        };
-    }
+    };
 
     Ok(WSGitRepoConfigValues {
         readonly: format!("https://github.com/{}/{}", org, repo),
