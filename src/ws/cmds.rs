@@ -14,6 +14,8 @@
 
 use std::path::PathBuf;
 
+use crate::{boomln, errorln, infoln, successln};
+
 #[derive(clap::Subcommand)]
 pub enum Cmds {
     Init(InitCommand),
@@ -31,13 +33,13 @@ pub struct InitCommand {
 pub fn handle_cmds(cmd: &Cmds) {
     match cmd {
         Cmds::Init(init) => {
-            log::info!("Create workspace at {}", init.path.display());
+            infoln!(format!("Create workspace at {}", init.path.display()));
             match super::init::init(&init.path) {
                 Ok(_) => {
-                    log::info!("Success!");
+                    successln!("Success!");
                 }
                 Err(_) => {
-                    log::error!("Error!");
+                    boomln!("Error!");
                 }
             };
             return;
@@ -49,21 +51,21 @@ pub fn handle_cmds(cmd: &Cmds) {
     let path = match std::env::current_dir() {
         Ok(p) => p,
         Err(e) => {
-            log::error!("Unable to obtain current directory: {}", e);
+            boomln!(format!("Unable to obtain current directory: {}", e));
             return;
         }
     };
     let _ws = match super::init::open(&path) {
         Ok(v) => v,
         Err(_) => {
-            log::error!("Unable to open workspace at {}", path.display());
+            errorln!(format!("Unable to open workspace at {}", path.display()));
             return;
         }
     };
 
     match cmd {
         Cmds::Init(_) => {
-            log::error!("Should never reach this point!");
+            boomln!("Should never reach this point!");
             return;
         }
     };

@@ -97,28 +97,28 @@ pub fn handle_cmds(cmd: &Cmds) {
     let mut release = match crate::release::Release::open(ws) {
         Ok(r) => r,
         Err(_) => {
-            log::error!("Unable to open workspace release config!");
+            boomln!("Unable to open workspace release config!");
             return;
         }
     };
 
     match cmd {
         Cmds::Info => {
-            log::debug!("Obtain workspace release info");
+            infoln!("Obtain workspace release info");
         }
         Cmds::Status => {
             log::debug!("Obtain release status");
             release.status();
         }
         Cmds::Start(start_cmd) => {
-            log::debug!(
+            infoln!(format!(
                 "Start a new release process for version {}",
                 start_cmd.version
-            );
+            ));
             let version = match crate::version::Version::from_str(&start_cmd.version) {
                 Ok(v) => v,
                 Err(_) => {
-                    log::error!("Error parsing provided version!");
+                    errorln!("Error parsing provided version!");
                     return;
                 }
             };
@@ -189,11 +189,11 @@ pub fn handle_cmds(cmd: &Cmds) {
             };
         }
         Cmds::List => {
-            log::error!("Should not have reached here!");
+            boomln!("Should not have reached here!");
             return;
         }
         Cmds::Init(_) => {
-            log::error!("Should not have reached here!");
+            boomln!("Should not have reached here!");
             return;
         }
     };
