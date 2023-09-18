@@ -148,6 +148,8 @@ impl GitRepo {
         self
     }
 
+    /// Obtain a given remote by name.
+    ///
     pub(crate) fn get_remote(self: &Self, name: &str) -> Result<git2::Remote, ()> {
         match self.repo.find_remote(name) {
             Ok(r) => Ok(r),
@@ -158,6 +160,9 @@ impl GitRepo {
         }
     }
 
+    /// Open a connection for the provided remote. If 'with_auth' is true, then
+    /// the connection will be authenticated using the user's ssh key agent.
+    ///
     pub(crate) fn open_remote<'a, 'b>(
         self: &'a Self,
         remote: &'b mut git2::Remote<'a>,
@@ -192,6 +197,8 @@ impl GitRepo {
         Ok(conn)
     }
 
+    /// Update a single remote for this repository, by name.
+    ///
     fn do_remote_update_single(self: &Self, name: &str, auth: bool) -> Result<(), ()> {
         let mut remote = self.get_remote(name).unwrap();
         let mut conn = match self.open_remote(&mut remote, git2::Direction::Fetch, auth) {
@@ -251,6 +258,10 @@ impl GitRepo {
         Ok(())
     }
 
+    /// Update this repository's submodules, if any exist. This may mean
+    /// downloading the submodule repository if it hasn't been done so yet.
+    /// This function outputs progress bars for the operation.
+    ///
     pub fn submodules_update(self: &Self) -> Result<(), ()> {
         let mut submodules = match self.repo.submodules() {
             Ok(v) => v,
@@ -294,6 +305,11 @@ impl GitRepo {
         Ok(())
     }
 
+    /// Helper function. Performs the actual submodule update, returning
+    /// progress via the provided callback function 'cb'.
+    /// It will first attempt to update the submodule, cloning it if necessary,
+    /// and then will attempt to synchronize the submodule's URLs with its remote.
+    ///
     fn do_submodule_update<F>(self: &Self, sm: &mut git2::Submodule, mut cb: F) -> Result<(), ()>
     where
         F: FnMut(git2::Progress),
@@ -329,6 +345,9 @@ impl GitRepo {
         Ok(())
     }
 
+    /// Obtain a vector containing all references associated with this
+    /// repository. References are obtained from the read-only 'ro' remote.
+    ///
     pub fn get_refs(self: &Self) -> Result<Vec<super::refs::GitRefEntry>, ()> {
         let mut remote = self.get_remote("ro").unwrap();
         let mut conn = match self.open_remote(&mut remote, git2::Direction::Fetch, false) {
@@ -350,6 +369,8 @@ impl GitRepo {
         Ok(refs)
     }
 
+    /// Create a branch from this repository's default branch.
+    ///
     pub fn branch_from_default(self: &Self, dst: &String) -> Result<(), ()> {
         let head_ref = self.repo.find_reference("refs/remotes/ro/HEAD").unwrap();
         let head_name = head_ref.symbolic_target().unwrap();
@@ -376,6 +397,8 @@ impl GitRepo {
         }
     }
 
+    /// Checks out the provided branch 'name'.
+    ///
     pub fn checkout_branch(self: &Self, name: &String) -> Result<(), ()> {
         let refname = format!("refs/heads/{}", name);
         match self.repo.set_head(&refname) {
@@ -399,6 +422,8 @@ impl GitRepo {
         Ok(())
     }
 
+    /// Obtains an object for the provided 'refspec', if it exists.
+    ///
     pub fn get_oid_by_refspec(self: &Self, refspec: &String) -> Result<git2::Object, ()> {
         match self.repo.revparse_single(&refspec) {
             Ok(o) => Ok(o),
@@ -409,6 +434,9 @@ impl GitRepo {
         }
     }
 
+    /// Pushes the provided 'refspec' to this repository's read-write 'rw' remote.
+    ///
+    // TODO(joao): make it output progress bars.
     pub fn push(self: &Self, refspec: &String) -> Result<(), ()> {
         let mut remote = match self.get_remote("rw") {
             Ok(r) => r,
@@ -442,6 +470,8 @@ impl GitRepo {
         Ok(())
     }
 
+    /// Set a given submodule 'name's HEAD to the provided 'refname'.
+    ///
     pub fn set_submodule_head(self: &Self, name: &String, refname: &String) -> Result<PathBuf, ()> {
         let submodule = match self.repo.find_submodule(&name) {
             Ok(s) => s,
@@ -507,6 +537,9 @@ impl GitRepo {
         Ok(submodule_path.to_path_buf())
     }
 
+    /// Stage the paths provided in a vector 'paths', by adding them to the
+    /// index. This does not perform a commit.
+    ///
     pub fn stage(self: &Self, paths: &Vec<PathBuf>) -> Result<(), ()> {
         let mut index = match self.repo.index() {
             Ok(idx) => idx,
