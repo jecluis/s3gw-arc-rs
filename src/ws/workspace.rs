@@ -16,16 +16,7 @@ use std::path::PathBuf;
 
 use crate::infoln;
 
-use super::{
-    config::WSConfig,
-    repository::{Repos, Repository},
-};
-
-struct SyncRepo<'a> {
-    pub name: String,
-    pub update_submodules: bool,
-    pub repo: &'a Repository,
-}
+use super::{config::WSConfig, repository::Repos};
 
 #[derive(Clone)]
 pub struct Workspace {
@@ -75,28 +66,7 @@ impl Workspace {
     /// individual repository in the workspace.
     ///
     pub fn sync(self: &Self) -> Result<(), ()> {
-        let repos: Vec<SyncRepo> = vec![
-            SyncRepo {
-                name: "s3gw".into(),
-                update_submodules: true,
-                repo: &self.repos.s3gw,
-            },
-            SyncRepo {
-                name: "ui".into(),
-                update_submodules: false,
-                repo: &self.repos.ui,
-            },
-            SyncRepo {
-                name: "charts".into(),
-                update_submodules: false,
-                repo: &self.repos.charts,
-            },
-            SyncRepo {
-                name: "ceph".into(),
-                update_submodules: false,
-                repo: &self.repos.ceph,
-            },
-        ];
+        let repos = self.repos.as_vec();
 
         infoln!("Synchronize workspace...");
         for entry in repos {
@@ -105,7 +75,7 @@ impl Workspace {
                 entry.name,
                 entry.update_submodules
             );
-            match entry.repo.sync(entry.update_submodules) {
+            match entry.sync(entry.update_submodules) {
                 Ok(_) => {}
                 Err(_) => {
                     return Err(());

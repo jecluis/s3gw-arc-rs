@@ -28,6 +28,7 @@ pub struct Repository {
     pub path: PathBuf,
     pub user_config: WSUserConfig,
     pub config: WSGitRepoConfigValues,
+    pub update_submodules: bool,
 }
 
 #[derive(Clone)]
@@ -49,6 +50,7 @@ impl Repos {
             &base_path.join("s3gw.git"),
             &user_config,
             &git_config.s3gw,
+            true,
         ) {
             Ok(v) => v,
             Err(_) => return Err(()),
@@ -58,6 +60,7 @@ impl Repos {
             &base_path.join("s3gw-ui.git"),
             &user_config,
             &git_config.ui,
+            false,
         ) {
             Ok(v) => v,
             Err(_) => return Err(()),
@@ -67,6 +70,7 @@ impl Repos {
             &base_path.join("charts.git"),
             &user_config,
             &git_config.charts,
+            false,
         ) {
             Ok(v) => v,
             Err(_) => return Err(()),
@@ -76,6 +80,7 @@ impl Repos {
             &base_path.join("ceph.git"),
             &user_config,
             &git_config.ceph,
+            false,
         ) {
             Ok(v) => v,
             Err(_) => return Err(()),
@@ -100,12 +105,14 @@ impl Repository {
         path: &PathBuf,
         user_config: &WSUserConfig,
         config: &WSGitRepoConfigValues,
+        update_submodules: bool,
     ) -> Result<Repository, ()> {
         let repo = Repository {
             name: name.clone(),
             path: path.to_path_buf(),
             user_config: user_config.clone(),
             config: config.clone(),
+            update_submodules,
         };
         Ok(repo)
     }
