@@ -161,18 +161,6 @@ impl Repository {
             git.set_user_name(&self.user_config.name)
                 .set_user_email(&self.user_config.email)
                 .set_signing_key(&self.user_config.signing_key);
-
-            if sync_submodules {
-                match git.submodules_update() {
-                    Ok(()) => {
-                        log::debug!("Updated submodules for cloned repo");
-                    }
-                    Err(()) => {
-                        log::error!("Error updating submodules for cloned repo!");
-                        return Err(());
-                    }
-                };
-            }
         }
         // git remote update
         let git = match git::repo::GitRepo::open(&self.path) {
@@ -189,6 +177,18 @@ impl Repository {
                 return Err(());
             }
         };
+
+        if sync_submodules {
+            match git.submodules_update() {
+                Ok(()) => {
+                    log::debug!("Updated submodules for repo");
+                }
+                Err(()) => {
+                    log::error!("Error updating submodules for repo!");
+                    return Err(());
+                }
+            };
+        }
 
         Ok(())
     }
