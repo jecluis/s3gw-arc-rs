@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Display;
+use std::{collections::HashMap, fmt::Display};
 
-pub enum GitRefType {
+#[derive(Clone)]
+enum GitRefType {
     BRANCH,
     TAG,
 }
@@ -28,14 +29,15 @@ impl Display for GitRefType {
     }
 }
 
-pub struct GitRefEntry {
+#[derive(Clone)]
+pub struct GitRef {
     pub name: String,
-    pub oid: String,
-    pub reftype: GitRefType,
-    pub is_remote: bool,
+    reftype: GitRefType,
+    pub has_remote: bool,
+    pub has_local: bool,
 }
 
-impl GitRefEntry {
+impl GitRef {
     pub fn is_branch(self: &Self) -> bool {
         match self.reftype {
             GitRefType::BRANCH => true,
@@ -51,9 +53,18 @@ impl GitRefEntry {
     }
 }
 
+pub type GitRefMap = HashMap<String, GitRef>;
+
+#[derive(Clone)]
+struct GitRefEntry {
+    pub name: String,
+    pub reftype: GitRefType,
+    pub is_remote: bool,
+}
+
 /// Obtain head references from a remote.
 ///
-pub fn get_refs_from_remote(remote: &git2::Remote) -> Result<Vec<GitRefEntry>, ()> {
+fn get_refs_from_remote(remote: &git2::Remote) -> Result<Vec<GitRefEntry>, ()> {
     let mut ref_vec: Vec<GitRefEntry> = vec![];
     let head_re = regex::Regex::new(r"^refs/heads/(.*)$").unwrap();
 
@@ -65,13 +76,11 @@ pub fn get_refs_from_remote(remote: &git2::Remote) -> Result<Vec<GitRefEntry>, (
         }
     };
     for head in ls {
-        let oid = head.oid();
         let name = head.name();
 
         if let Some(head_m) = head_re.captures(name) {
             ref_vec.push(GitRefEntry {
                 name: String::from(&head_m[1]),
-                oid: oid.to_string(),
                 reftype: GitRefType::BRANCH,
                 is_remote: true,
             });
@@ -83,7 +92,7 @@ pub fn get_refs_from_remote(remote: &git2::Remote) -> Result<Vec<GitRefEntry>, (
 
 /// Obtain tag and head references from a local repository.
 ///
-pub fn get_refs_from_local(repository: &git2::Repository) -> Result<Vec<GitRefEntry>, ()> {
+fn get_refs_from_local(repository: &git2::Repository) -> Result<Vec<GitRefEntry>, ()> {
     let mut ref_vec: Vec<GitRefEntry> = vec![];
     let tag_re = regex::Regex::new(r"^refs/tags/(.*)$").unwrap();
     let heads_re = regex::Regex::new(r"^refs/heads/(.*)$").unwrap();
@@ -106,18 +115,6 @@ pub fn get_refs_from_local(repository: &git2::Repository) -> Result<Vec<GitRefEn
 
     for entry in ref_it {
         if let Ok(r) = entry {
-            let oid = match r.peel_to_commit() {
-                Err(err) => {
-                    log::error!(
-                        "Unable to obtain commit for {}: {}",
-                        r.name().unwrap_or("N/A"),
-                        err
-                    );
-                    continue;
-                }
-                Ok(c) => c.id().to_string(),
-            };
-
             log::trace!(
                 "=> ref: {}, is_branch: {}, is_remote: {}",
                 match r.name() {
@@ -155,7 +152,6 @@ pub fn get_refs_from_local(repository: &git2::Repository) -> Result<Vec<GitRefEn
 
             ref_vec.push(GitRefEntry {
                 name: name.clone(),
-                oid: oid.clone(),
                 reftype,
                 is_remote: false,
             });
@@ -167,10 +163,7 @@ pub fn get_refs_from_local(repository: &git2::Repository) -> Result<Vec<GitRefEn
 
 /// Obtain references from a repository, both local and its remote.
 ///
-pub fn get_refs_from(
-    remote: &git2::Remote,
-    repo: &git2::Repository,
-) -> Result<Vec<GitRefEntry>, ()> {
+pub fn get_refs_from(remote: &git2::Remote, repo: &git2::Repository) -> Result<GitRefMap, ()> {
     let mut ref_vec: Vec<GitRefEntry> = vec![];
 
     match &mut get_refs_from_remote(&remote) {
@@ -189,5 +182,29 @@ pub fn get_refs_from(
         Ok(v) => ref_vec.append(v),
     };
 
-    Ok(ref_vec)
+    let mut ref_map = HashMap::<String, GitRef>::new();
+    for entry in &ref_vec {
+        if !ref_map.contains_key(&entry.name) {
+            ref_map.insert(
+                entry.name.clone(),
+                GitRef {
+                    name: entry.name.clone(),
+                    reftype: entry.reftype.clone(),
+                    has_remote: false,
+                    has_local: false,
+                },
+            );
+        }
+        let map_entry = ref_map.get_mut(&entry.name).unwrap();
+        // we only set the remote flag on a GitRefEntry if it's coming from the
+        // 'get_refs_from_remote()' function; otherwise, if it's coming from the
+        // 'get_refs_from_local()' function, 'is_remote' is false.
+        if entry.is_remote {
+            map_entry.has_remote = true;
+        } else {
+            map_entry.has_local = true;
+        }
+    }
+
+    Ok(ref_map)
 }

@@ -14,7 +14,7 @@
 
 use std::{collections::BTreeMap, path::PathBuf};
 
-use crate::git::{self, refs::GitRefEntry};
+use crate::git::{self, refs::GitRef};
 use crate::{boomln, version::Version};
 
 use super::{
@@ -246,14 +246,14 @@ impl Repository {
         };
 
         let mut version_tree: BTreeMap<u64, crate::version::BaseVersion> = BTreeMap::new();
-        let branch_refs: Vec<&git::refs::GitRefEntry> =
-            refs.iter().filter(|e| e.is_branch()).collect();
-        let tag_refs: Vec<&git::refs::GitRefEntry> = refs.iter().filter(|e| e.is_tag()).collect();
+        let branch_refs: Vec<&git::refs::GitRef> =
+            refs.values().filter(|e| e.is_branch()).collect();
+        let tag_refs: Vec<&git::refs::GitRef> = refs.values().filter(|e| e.is_tag()).collect();
 
         // populate tree with all the existing releases -- i.e., all the git
         // refs that match this repository's branch pattern.
         for branch in branch_refs {
-            log::trace!("branch '{}' oid {}", branch.name, branch.oid);
+            log::trace!("get_releases: branch '{}'", branch.name);
             if let Some(m) = branch_re.captures(&branch.name) {
                 assert_eq!(m.len(), 2);
 
@@ -280,7 +280,7 @@ impl Repository {
         // corresponding release entry. Skip a tag if its expected release is
         // not found in the version tree.
         for tag in tag_refs {
-            log::trace!("tag '{}' oid {}", tag.name, tag.oid);
+            log::trace!("get_releases: tag '{}'", tag.name);
             if let Some(m) = tag_re.captures(&tag.name) {
                 assert_eq!(m.len(), 2);
 
@@ -362,7 +362,7 @@ impl Repository {
 
     fn get_versions_from_refs(
         self: &Self,
-        refs: &Vec<&crate::git::refs::GitRefEntry>,
+        refs: &Vec<&crate::git::refs::GitRef>,
         regex_pattern: &String,
     ) -> Result<BTreeMap<u64, Version>, ()> {
         let regex = match regex::Regex::new(&regex_pattern) {
@@ -375,11 +375,7 @@ impl Repository {
 
         let mut versions: BTreeMap<u64, Version> = BTreeMap::new();
         for entry in refs {
-            log::trace!(
-                "get_versions_from_refs: process '{}' (oid {})",
-                entry.name,
-                entry.oid
-            );
+            log::trace!("get_versions_from_refs: handle '{}'", entry.name,);
             if let Some(m) = regex.captures(&entry.name) {
                 assert_eq!(m.len(), 2);
 
@@ -400,7 +396,7 @@ impl Repository {
                     "version id {} for ref {} ({})",
                     version_id,
                     entry.name,
-                    match entry.is_remote {
+                    match entry.has_remote {
                         true => "remote",
                         false => "local",
                     }
@@ -414,7 +410,7 @@ impl Repository {
         Ok(versions)
     }
 
-    fn get_git_refs(self: &Self) -> Result<Vec<crate::git::refs::GitRefEntry>, ()> {
+    pub fn get_git_refs(self: &Self) -> Result<crate::git::refs::GitRefMap, ()> {
         let git = match git::repo::GitRepo::open(&self.path) {
             Ok(v) => v,
             Err(()) => {
@@ -437,7 +433,7 @@ impl Repository {
             }
         };
 
-        let tag_refs: Vec<&git::refs::GitRefEntry> = refs.iter().filter(|e| e.is_tag()).collect();
+        let tag_refs: Vec<&git::refs::GitRef> = refs.values().filter(|e| e.is_tag()).collect();
 
         match self.get_versions_from_refs(&tag_refs, &self.config.tag_pattern) {
             Ok(v) => Ok(v),
@@ -463,8 +459,8 @@ impl Repository {
             }
         };
 
-        let branch_refs: Vec<&crate::git::refs::GitRefEntry> =
-            refs.iter().filter(|e| e.is_branch()).collect();
+        let branch_refs: Vec<&crate::git::refs::GitRef> =
+            refs.values().filter(|e| e.is_branch()).collect();
 
         match self.get_versions_from_refs(&branch_refs, &self.config.branch_pattern) {
             Ok(v) => Ok(v),
@@ -550,48 +546,6 @@ impl Repository {
                     dst_branch,
                     self.name
                 );
-                return Err(());
-            }
-        };
-
-        Ok(())
-    }
-
-    pub fn _find_release_branch(self: &Self, relver: &Version) -> Result<(), ()> {
-        let refs = match self.get_git_refs() {
-            Ok(r) => r,
-            Err(()) => return Err(()),
-        };
-
-        let branch_name = relver.to_str_fmt(&self.config.branch_format);
-        let branch_refs: Vec<&GitRefEntry> = refs
-            .iter()
-            .filter(|e| e.is_branch() && e.name == branch_name)
-            .collect();
-
-        if branch_refs.len() == 0 {
-            log::error!(
-                "Unable to find release branch for '{}' in repo '{}'!",
-                branch_name,
-                self.name
-            );
-            return Err(());
-        }
-
-        let is_remote = branch_refs.iter().any(|e| e.is_remote);
-
-        let git = match git::repo::GitRepo::open(&self.path) {
-            Ok(r) => r,
-            Err(()) => {
-                log::error!("Unable to open git repository at '{}'", self.path.display());
-                return Err(());
-            }
-        };
-
-        let _branch = match git._find_branch(&branch_name, &is_remote) {
-            Ok(b) => b,
-            Err(()) => {
-                log::error!("Error obtaining branch '{}'", branch_name);
                 return Err(());
             }
         };

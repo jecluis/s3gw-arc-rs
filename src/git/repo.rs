@@ -348,7 +348,7 @@ impl GitRepo {
     /// Obtain a vector containing all references associated with this
     /// repository. References are obtained from the read-only 'ro' remote.
     ///
-    pub fn get_refs(self: &Self) -> Result<Vec<super::refs::GitRefEntry>, ()> {
+    pub fn get_refs(self: &Self) -> Result<super::refs::GitRefMap, ()> {
         let mut remote = self.get_remote("ro").unwrap();
         let mut conn = match self.open_remote(&mut remote, git2::Direction::Fetch, false) {
             Ok(v) => v,
