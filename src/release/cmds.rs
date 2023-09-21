@@ -24,18 +24,10 @@ pub enum Cmds {
     List,
     /// Release status.
     Status,
-    /// Initiate a release.
-    Init(InitCommand),
     /// Start a new release process.
     Start(StartCommand),
     /// Continue the release process.
     Continue(ContinueCommand),
-}
-
-#[derive(clap::Args)]
-pub struct InitCommand {
-    #[arg(value_name = "VERSION", short, long)]
-    release: Option<String>,
 }
 
 #[derive(clap::Args)]
@@ -83,18 +75,6 @@ pub fn handle_cmds(cmd: &Cmds) {
                 Ok(()) => {}
                 Err(()) => {
                     boomln!("Unable to list releases!");
-                }
-            };
-            return;
-        }
-        Cmds::Init(cmd) => {
-            log::debug!("Init release");
-            match crate::release::init::init(&ws, &cmd.release) {
-                Ok(release) => {
-                    successln!(format!("Release {} init'ed.", release.get_version()));
-                }
-                Err(e) => {
-                    errorln!(format!("Error init'ing release: {:?}", e));
                 }
             };
             return;
@@ -209,10 +189,6 @@ pub fn handle_cmds(cmd: &Cmds) {
             };
         }
         Cmds::List => {
-            boomln!("Should not have reached here!");
-            return;
-        }
-        Cmds::Init(_) => {
             boomln!("Should not have reached here!");
             return;
         }

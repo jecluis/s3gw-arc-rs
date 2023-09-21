@@ -21,7 +21,6 @@ pub mod cmds;
 mod common;
 mod cont;
 pub mod errors;
-mod init;
 mod list;
 mod start;
 mod sync;
@@ -112,14 +111,6 @@ impl Release {
         };
 
         Ok(())
-    }
-
-    pub fn get_version(self: &Self) -> String {
-        if let Some(state) = &self.state {
-            state.release_version.get_version_str()
-        } else {
-            String::from("unknown version")
-        }
     }
 
     pub fn status(self: &Self) {
