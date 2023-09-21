@@ -20,7 +20,7 @@ pub enum ReleaseError {
     AlreadyInit,
     CorruptedError,
     InitError,
-    // NotStartedError,
+    NotStartedError,
     ReleaseExistsError,
     UserAbortedError,
 
@@ -34,7 +34,7 @@ impl Display for ReleaseError {
             ReleaseError::AlreadyInit => "release already init",
             ReleaseError::CorruptedError => "corrupted release",
             ReleaseError::InitError => "unable to init release",
-            // ReleaseError::NotStartedError => "release not started",
+            ReleaseError::NotStartedError => "release not started",
             ReleaseError::ReleaseExistsError => "release already exists",
             ReleaseError::UserAbortedError => "user aborted",
             ReleaseError::UnknownError => "unknown error",

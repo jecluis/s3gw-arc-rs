@@ -256,7 +256,7 @@ fn cut_branches_for(version: &Version, repos: &Vec<&Repository>) -> Result<(), R
 /// the provided file to the 's3gw' repo's release notes file before
 /// finalizing the release candidate.
 ///
-fn start_release_candidate(
+pub fn start_release_candidate(
     ws: &Workspace,
     relver: &Version,
     notes: Option<&PathBuf>,

@@ -14,7 +14,7 @@
 
 use std::path::PathBuf;
 
-use crate::{boomln, errorln, infoln, successln, warnln};
+use crate::{boomln, errorln, infoln, successln, version::Version, warnln};
 
 #[derive(clap::Subcommand)]
 pub enum Cmds {
@@ -50,7 +50,15 @@ pub struct StartCommand {
 }
 
 #[derive(clap::Args)]
-pub struct ContinueCommand {}
+pub struct ContinueCommand {
+    /// Release notes
+    #[arg(value_name = "FILE", short, long)]
+    notes: PathBuf,
+
+    /// Release version to continue (e.g., v0.17.1)
+    #[arg(value_name = "VERSION", short, long)]
+    version: Option<String>,
+}
 
 pub fn handle_cmds(cmd: &Cmds) {
     let path = match std::env::current_dir() {
@@ -123,25 +131,8 @@ pub fn handle_cmds(cmd: &Cmds) {
                 }
             };
 
-            if !start_cmd.notes.exists() {
-                errorln!(format!(
-                    "Release Notes file at {} does not exist!",
-                    start_cmd.notes.display()
-                ));
+            if !check_notes_file(&start_cmd.notes) {
                 return;
-            } else {
-                match start_cmd.notes.extension() {
-                    Some(ext) => {
-                        if ext.to_ascii_lowercase() != "md" {
-                            errorln!("Provided Release Notes file is not a Markdown file!");
-                            return;
-                        }
-                    }
-                    None => {
-                        errorln!("Provided Release Notes file is not a Markdown file!");
-                        return;
-                    }
-                };
             }
 
             if let Some(s) = &release.state {
@@ -169,22 +160,51 @@ pub fn handle_cmds(cmd: &Cmds) {
                 }
             };
         }
-        Cmds::Continue(_) => {
-            let relver = match &release.state {
-                None => {
-                    boomln!("Release state not found!");
-                    infoln!("Maybe you want to init the release first?");
+        Cmds::Continue(continue_cmd) => {
+            let cmd_relver = match &continue_cmd.version {
+                None => None,
+                Some(v) => match Version::from_str(&v) {
+                    Ok(r) => Some(r),
+                    Err(()) => {
+                        boomln!(format!("Unable to parse provided version '{}'", v));
+                        return;
+                    }
+                },
+            };
+
+            if let Some(v) = &release.state {
+                if cmd_relver.is_some() {
+                    errorln!(format!(
+                        "Release state already found for version {}, but version provided.",
+                        v.release_version
+                    ));
                     return;
                 }
+            }
+
+            let relver = match &release.state {
+                None => match cmd_relver {
+                    None => {
+                        errorln!("Must provide a version to continue, or start a new release!");
+                        return;
+                    }
+                    Some(v) => v,
+                },
                 Some(s) => s.release_version.clone(),
             };
+
+            if !check_notes_file(&continue_cmd.notes) {
+                return;
+            }
+
             infoln!(format!("Continue a release process for version {}", relver));
-            match &release.cont() {
+            match crate::release::cont::continue_release(&mut release, &relver, &continue_cmd.notes)
+            {
                 Ok(()) => {
                     successln!(format!("Release {} successfully continued.", relver));
                 }
-                Err(()) => {
-                    boomln!("Error continuing release.");
+                Err(err) => {
+                    boomln!(format!("Error continuing release: {}", err));
                 }
             };
         }
@@ -197,4 +217,27 @@ pub fn handle_cmds(cmd: &Cmds) {
             return;
         }
     };
+}
+
+fn check_notes_file(notes: &PathBuf) -> bool {
+    if !notes.exists() {
+        errorln!(format!(
+            "Release Notes file at '{}; does not exist!",
+            notes.display()
+        ));
+        return false;
+    }
+    match notes.extension() {
+        Some(ext) => {
+            if ext.to_ascii_lowercase() != "md" {
+                errorln!("Provided Release Notes file is not a Markdown file!");
+                return false;
+            }
+        }
+        None => {
+            errorln!("Provided Release Notes file is not a Markdown file!");
+            return false;
+        }
+    };
+    return true;
 }
