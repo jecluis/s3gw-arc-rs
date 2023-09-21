@@ -14,8 +14,9 @@
 
 use std::{collections::BTreeMap, path::PathBuf};
 
-use crate::git::{self, refs::GitRef};
+use crate::git;
 use crate::{boomln, version::Version};
+use crate::{errorln, successln};
 
 use super::{
     config::{WSGitRepoConfigValues, WSGitReposConfig, WSUserConfig},
@@ -421,6 +422,26 @@ impl Repository {
         git.get_refs()
     }
 
+    /// Obtain vector containing all the GitRefEntry that are branches, local or remote.
+    ///
+    pub fn get_heads_refs(self: &Self) -> Result<Vec<crate::git::refs::GitRef>, ()> {
+        let refs = match self.get_git_refs() {
+            Ok(r) => r,
+            Err(()) => {
+                boomln!(format!(
+                    "Unable to obtain git refs for repository '{}'",
+                    self.name
+                ));
+                return Err(());
+            }
+        };
+        let mut heads = vec![];
+        for entry in refs.values().filter(|e| e.is_branch()) {
+            heads.push(entry.clone());
+        }
+        Ok(heads)
+    }
+
     pub fn get_versions(self: &Self) -> Result<BTreeMap<u64, Version>, ()> {
         let refs = match self.get_git_refs() {
             Ok(v) => v,
@@ -544,6 +565,69 @@ impl Repository {
                 log::error!(
                     "Unable to checkout '{}' on repository '{}'",
                     dst_branch,
+                    self.name
+                );
+                return Err(());
+            }
+        };
+
+        Ok(())
+    }
+
+    /// Checks out the branch for the specified base version. Will fetch the
+    /// branch if not already local. Will ensure branch is updated from remote
+    /// branch.
+    pub fn checkout_branch(self: &Self, base_ver: &Version) -> Result<(), ()> {
+        let heads = match self.get_heads_refs() {
+            Ok(v) => v,
+            Err(()) => {
+                return Err(());
+            }
+        };
+        let branch_str = self.version_to_str(&base_ver, false);
+        let ref_entry = match heads.iter().find(|e| e.name == branch_str) {
+            None => {
+                errorln!(format!(
+                    "Unable to find branch '{}' local or remote",
+                    branch_str
+                ));
+                return Err(());
+            }
+            Some(e) => e,
+        };
+
+        let git = match git::repo::GitRepo::open(&self.path) {
+            Ok(v) => v,
+            Err(()) => {
+                boomln!(format!(
+                    "Unable to open git repository at '{}'",
+                    self.path.display()
+                ));
+                return Err(());
+            }
+        };
+
+        if !ref_entry.has_local {
+            // must fetch branch prior to checkout
+            match git.fetch(&format!("refs/heads/{}", branch_str), &branch_str) {
+                Ok(()) => {
+                    successln!(format!("Successfully fetched '{}'", branch_str));
+                }
+                Err(()) => {
+                    errorln!(format!("Error fetching '{}'", branch_str));
+                    return Err(());
+                }
+            };
+        }
+        // checkout branch
+        match git.checkout_branch(&branch_str) {
+            Ok(()) => {
+                log::info!("Checked out '{}' on repository '{}'", branch_str, self.name);
+            }
+            Err(()) => {
+                log::error!(
+                    "Unable to checkout '{}' on repository '{}'",
+                    branch_str,
                     self.name
                 );
                 return Err(());

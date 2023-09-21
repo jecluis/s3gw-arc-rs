@@ -470,6 +470,55 @@ impl GitRepo {
         Ok(())
     }
 
+    /// Fetch a given refspec, branching the resulting FETCH_HEAD into a branch
+    /// with the provided 'dst_branch_name' name.
+    ///
+    pub fn fetch(self: &Self, refspec: &String, dst_branch_name: &String) -> Result<(), ()> {
+        let mut remote = match self.get_remote("ro") {
+            Ok(r) => r,
+            Err(()) => {
+                log::error!("Error obtaining 'rw' remote to fetch refspec '{}'", refspec);
+                return Err(());
+            }
+        };
+        match remote.fetch(&[refspec], None, None) {
+            Ok(()) => {
+                log::debug!("Fetched refspec '{}'", refspec);
+            }
+            Err(err) => {
+                log::error!("Error fetching refspec '{}': {}", refspec, err);
+                return Err(());
+            }
+        };
+
+        let fetch_head = self.repo.find_reference("FETCH_HEAD").unwrap();
+        let commit = self
+            .repo
+            .reference_to_annotated_commit(&fetch_head)
+            .unwrap();
+        match self
+            .repo
+            .branch_from_annotated_commit(&dst_branch_name, &commit, true)
+        {
+            Ok(_) => {
+                log::debug!(
+                    "Successfully branched from FETCH_HEAD to '{}'",
+                    dst_branch_name
+                );
+            }
+            Err(err) => {
+                log::error!(
+                    "Error branching from FETCH_HEAD to '{}': {}",
+                    dst_branch_name,
+                    err
+                );
+                return Err(());
+            }
+        };
+
+        Ok(())
+    }
+
     /// Set a given submodule 'name's HEAD to the provided 'refname'.
     ///
     pub fn set_submodule_head(self: &Self, name: &String, refname: &String) -> Result<PathBuf, ()> {

@@ -100,6 +100,16 @@ pub fn start(release: &mut Release, version: &Version, notes: &PathBuf) -> Resul
         }
     };
 
+    match crate::release::sync::sync(&release, &version) {
+        Ok(()) => {
+            infoln!("Synchronized release repositories");
+        }
+        Err(()) => {
+            errorln!("Unable to synchronize release repositories!");
+            return Err(());
+        }
+    };
+
     // start a new release version release candidate.
     match start_release_candidate(&ws, &version, Some(&notes)) {
         Ok(ver) => {
@@ -162,6 +172,8 @@ fn create_release_branches(ws: &Workspace, version: &Version) -> Result<bool, ()
     Ok(res)
 }
 
+/// Check whether we need to cut release branches, and, if so, for which repositories.
+///
 fn maybe_cut_branches<'a>(
     ws: &'a Workspace,
     version: &Version,
@@ -193,7 +205,7 @@ fn maybe_cut_branches<'a>(
         return Err(ReleaseError::CorruptedError);
     }
 
-    println!(
+    infoln!(format!(
         "Need to cut release branches for v{} on repositories {}",
         base_version,
         repos_to_cut
@@ -201,7 +213,7 @@ fn maybe_cut_branches<'a>(
             .map(|x: &&Repository| x.name.clone())
             .collect::<Vec<String>>()
             .join(", ")
-    );
+    ));
     match inquire::Confirm::new("Cut required branches?")
         .with_default(true)
         .prompt()

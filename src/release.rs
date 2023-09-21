@@ -24,6 +24,7 @@ pub mod errors;
 mod init;
 mod list;
 mod start;
+mod sync;
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct ReleaseState {
