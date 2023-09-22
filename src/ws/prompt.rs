@@ -256,7 +256,7 @@ pub fn init_prompt(default_config: &WSConfig) -> Result<WSConfig, ()> {
     };
 
     match Confirm::new("Do you want to setup custom git repositories?")
-        .with_default(false)
+        .with_default(true)
         .prompt()
     {
         Ok(true) => {
