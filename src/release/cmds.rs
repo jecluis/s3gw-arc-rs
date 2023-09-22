@@ -16,6 +16,15 @@ use std::path::PathBuf;
 
 use crate::{boomln, errorln, infoln, successln, version::Version, warnln};
 
+use super::ReleaseState;
+
+#[derive(Clone, Copy, Debug)]
+pub enum CmdVersionError {
+    UnableToParseError,
+    StateFoundError,
+    VersionNotProvidedError,
+}
+
 #[derive(clap::Subcommand)]
 pub enum Cmds {
     /// Obtain release information.
@@ -28,6 +37,8 @@ pub enum Cmds {
     Start(StartCommand),
     /// Continue the release process.
     Continue(ContinueCommand),
+    /// Finish the release process.
+    Finish(FinishCommand),
 }
 
 #[derive(clap::Args)]
@@ -48,6 +59,13 @@ pub struct ContinueCommand {
     notes: PathBuf,
 
     /// Release version to continue (e.g., v0.17.1)
+    #[arg(value_name = "VERSION", short, long)]
+    version: Option<String>,
+}
+
+#[derive(clap::Args)]
+pub struct FinishCommand {
+    /// Release version to finish (e.g., v0.17.1)
     #[arg(value_name = "VERSION", short, long)]
     version: Option<String>,
 }
@@ -141,36 +159,16 @@ pub fn handle_cmds(cmd: &Cmds) {
             };
         }
         Cmds::Continue(continue_cmd) => {
-            let cmd_relver = match &continue_cmd.version {
-                None => None,
-                Some(v) => match Version::from_str(&v) {
-                    Ok(r) => Some(r),
-                    Err(()) => {
-                        boomln!(format!("Unable to parse provided version '{}'", v));
-                        return;
-                    }
-                },
-            };
-
-            if let Some(v) = &release.state {
-                if cmd_relver.is_some() {
-                    errorln!(format!(
-                        "Release state already found for version {}, but version provided.",
-                        v.release_version
-                    ));
+            let relver = match check_version_against_state(&release.state, &continue_cmd.version) {
+                Ok(v) => v,
+                Err(CmdVersionError::VersionNotProvidedError) => {
+                    errorln!("Must provide a version to continue, or have a started release!");
                     return;
                 }
-            }
-
-            let relver = match &release.state {
-                None => match cmd_relver {
-                    None => {
-                        errorln!("Must provide a version to continue, or start a new release!");
-                        return;
-                    }
-                    Some(v) => v,
-                },
-                Some(s) => s.release_version.clone(),
+                Err(_) => {
+                    // all other errors are output by the check function.
+                    return;
+                }
             };
 
             if !check_notes_file(&continue_cmd.notes) {
@@ -185,6 +183,29 @@ pub fn handle_cmds(cmd: &Cmds) {
                 }
                 Err(err) => {
                     boomln!(format!("Error continuing release: {}", err));
+                }
+            };
+        }
+        Cmds::Finish(finish_cmd) => {
+            let relver = match check_version_against_state(&release.state, &finish_cmd.version) {
+                Ok(v) => v,
+                Err(CmdVersionError::VersionNotProvidedError) => {
+                    errorln!("Must provide a version to finish, or have a started release!");
+                    return;
+                }
+                Err(_) => {
+                    // all other errors are output by the check function.
+                    return;
+                }
+            };
+
+            infoln!(format!("Finish release process for version {}", relver));
+            match crate::release::finish::finish(&mut release, &relver) {
+                Ok(()) => {
+                    successln!(format!("Finished release {}!", relver));
+                }
+                Err(err) => {
+                    boomln!(format!("Error finishing release: {}", err));
                 }
             };
         }
@@ -216,4 +237,42 @@ fn check_notes_file(notes: &PathBuf) -> bool {
         }
     };
     return true;
+}
+
+fn check_version_against_state(
+    state: &Option<ReleaseState>,
+    version: &Option<String>,
+) -> Result<Version, CmdVersionError> {
+    let cmd_relver = match &version {
+        None => None,
+        Some(v) => match Version::from_str(v) {
+            Ok(r) => Some(r),
+            Err(()) => {
+                boomln!(format!("Unable to parse provided version '{}'", v));
+                return Err(CmdVersionError::UnableToParseError);
+            }
+        },
+    };
+
+    if let Some(v) = &state {
+        if cmd_relver.is_some() {
+            errorln!(format!(
+                "Release state already found for version {}, but version provided.",
+                v.release_version
+            ));
+            return Err(CmdVersionError::StateFoundError);
+        }
+    }
+
+    let relver = match &state {
+        None => match cmd_relver {
+            None => {
+                return Err(CmdVersionError::VersionNotProvidedError);
+            }
+            Some(v) => v,
+        },
+        Some(s) => s.release_version.clone(),
+    };
+
+    Ok(relver)
 }

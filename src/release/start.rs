@@ -284,6 +284,31 @@ pub fn start_release_candidate(
         next_rc, next_ver
     ));
 
+    match perform_release(&ws, &relver, &next_ver, &notes) {
+        Ok(()) => {
+            successln!(format!(
+                "Started release ver '{}' tag '{}'",
+                relver, next_ver
+            ));
+            Ok(next_ver)
+        }
+        Err(err) => {
+            errorln!(format!("Error performing release {}: {}", next_ver, err));
+            Err(err)
+        }
+    }
+}
+
+/// Perform a release, by creating appropriate tags and ensuring the 's3gw' repo
+/// represents the correct state for said release.
+/// This is used to start a new release candidate, as well to finish a release.
+///
+pub fn perform_release(
+    ws: &Workspace,
+    relver: &Version,
+    next_ver: &Version,
+    notes: &Option<&PathBuf>,
+) -> Result<(), ReleaseError> {
     // start release candidate on the various repositories, except
     // 's3gw.git'.
     let mut submodules = vec![
@@ -358,7 +383,7 @@ pub fn start_release_candidate(
             }
         };
 
-        if !entry.push_rc_tags {
+        if !entry.push_rc_tags && next_ver.rc.is_some() {
             continue;
         }
 
@@ -487,9 +512,5 @@ pub fn start_release_candidate(
         }
     };
 
-    successln!(format!(
-        "Started release ver '{}' tag '{}'",
-        relver, next_ver
-    ));
-    Ok(next_ver)
+    Ok(())
 }

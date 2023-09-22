@@ -17,10 +17,12 @@ use std::path::PathBuf;
 use crate::version::Version;
 use crate::ws::workspace::Workspace;
 
+mod charts;
 pub mod cmds;
 mod common;
 mod cont;
 pub mod errors;
+mod finish;
 mod list;
 mod start;
 mod sync;

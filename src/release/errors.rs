@@ -35,3 +35,19 @@ impl Display for ReleaseError {
         })
     }
 }
+
+#[derive(Clone, Copy, Debug)]
+pub enum ChartsError {
+    DoesNotExistError,
+
+    UnknownError,
+}
+
+impl Display for ChartsError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            ChartsError::DoesNotExistError => "chart file does not exist",
+            ChartsError::UnknownError => "unknown error",
+        })
+    }
+}
