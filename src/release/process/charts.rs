@@ -20,7 +20,7 @@ use std::path::PathBuf;
 
 use crate::{boomln, version::Version, ws::repository::Repository};
 
-use super::errors::ChartsError;
+use crate::release::errors::ChartsError;
 
 pub fn update_charts(repo: &Repository, version: &Version) -> Result<(), ChartsError> {
     let chart_path_rel = PathBuf::from("charts/s3gw/Chart.yaml");

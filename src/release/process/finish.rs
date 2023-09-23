@@ -14,13 +14,13 @@
 
 use crate::{
     boomln, errorln, infoln,
-    release::start,
-    release::{charts, sync},
+    release::process::{charts, start},
+    release::sync,
     successln,
     version::Version,
 };
 
-use super::{errors::ReleaseError, Release};
+use crate::release::{errors::ReleaseError, Release};
 
 pub fn finish(release: &mut Release, version: &Version) -> Result<(), ReleaseError> {
     // 1. check whether release has been finished
@@ -33,7 +33,7 @@ pub fn finish(release: &mut Release, version: &Version) -> Result<(), ReleaseErr
 
     let ws = &release.ws;
 
-    let release_versions = super::common::get_release_versions(&ws, &version);
+    let release_versions = crate::release::common::get_release_versions(&ws, &version);
     if release_versions.contains_key(&version.get_version_id()) {
         errorln!(format!("Release version {} already exists", version));
         return Err(ReleaseError::ReleaseExistsError);

@@ -14,11 +14,11 @@
 
 use std::path::PathBuf;
 
-use crate::release::{start, sync};
+use crate::release::process::start;
+use crate::release::sync;
+use crate::release::Release;
 use crate::successln;
 use crate::{errorln, infoln, release::errors::ReleaseError, version::Version};
-
-use super::Release;
 
 pub fn continue_release(
     release: &mut Release,
@@ -32,7 +32,7 @@ pub fn continue_release(
 
     let ws = &release.ws;
 
-    let release_versions = super::common::get_release_versions(&ws, &version);
+    let release_versions = crate::release::common::get_release_versions(&ws, &version);
     if release_versions.contains_key(&version.get_version_id()) {
         errorln!(format!("Release version {} already exists", version));
         return Err(ReleaseError::ReleaseExistsError);

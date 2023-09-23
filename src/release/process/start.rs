@@ -24,7 +24,7 @@ use crate::{
     ws::repository::Repository,
 };
 
-use super::Release;
+use crate::release::Release;
 
 struct SubmoduleInfo<'a> {
     name: String,

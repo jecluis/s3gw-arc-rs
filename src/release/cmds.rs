@@ -146,7 +146,7 @@ pub fn handle_cmds(cmd: &Cmds) {
                 return;
             }
 
-            match crate::release::start::start(&mut release, &version, &start_cmd.notes) {
+            match crate::release::process::start::start(&mut release, &version, &start_cmd.notes) {
                 Ok(()) => {
                     successln!(format!(
                         "Release for version {} successfully started!",
@@ -176,8 +176,11 @@ pub fn handle_cmds(cmd: &Cmds) {
             }
 
             infoln!(format!("Continue a release process for version {}", relver));
-            match crate::release::cont::continue_release(&mut release, &relver, &continue_cmd.notes)
-            {
+            match crate::release::process::cont::continue_release(
+                &mut release,
+                &relver,
+                &continue_cmd.notes,
+            ) {
                 Ok(()) => {
                     successln!(format!("Release {} successfully continued.", relver));
                 }
@@ -200,7 +203,7 @@ pub fn handle_cmds(cmd: &Cmds) {
             };
 
             infoln!(format!("Finish release process for version {}", relver));
-            match crate::release::finish::finish(&mut release, &relver) {
+            match crate::release::process::finish::finish(&mut release, &relver) {
                 Ok(()) => {
                     successln!(format!("Finished release {}!", relver));
                 }
