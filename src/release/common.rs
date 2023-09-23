@@ -20,14 +20,6 @@ pub fn get_release_versions(ws: &Workspace, relver: &Version) -> BTreeMap<u64, V
     let min_id = relver.min().get_version_id();
     let max_id = relver.max().get_version_id();
 
-    // println!(
-    //     "v: {}, id: {}, min: {}, max: {}",
-    //     version,
-    //     version.get_version_id(),
-    //     min_id,
-    //     max_id
-    // );
-
     let version_tree = ws.repos.s3gw.get_versions().unwrap();
     let avail = version_tree.range((
         std::ops::Bound::Included(min_id),
