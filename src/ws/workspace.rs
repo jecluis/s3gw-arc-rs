@@ -21,7 +21,7 @@ use super::{config::WSConfig, repository::Repos};
 #[derive(Clone)]
 pub struct Workspace {
     path: PathBuf,
-    _config: WSConfig,
+    pub config: WSConfig,
     pub repos: Repos,
 }
 
@@ -52,7 +52,7 @@ impl Workspace {
 
         Ok(Workspace {
             path: path.to_path_buf(),
-            _config: cfg,
+            config: cfg,
             repos,
         })
     }

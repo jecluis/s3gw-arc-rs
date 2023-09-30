@@ -30,6 +30,6 @@ async fn main() {
 
     match &cmd.command {
         args::Command::WS(cmd) => ws::cmds::handle_cmds(&cmd.command),
-        args::Command::Rel(cmd) => release::cmds::handle_cmds(&cmd.command),
+        args::Command::Rel(cmd) => release::cmds::handle_cmds(&cmd.command).await,
     };
 }

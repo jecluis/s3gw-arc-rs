@@ -32,13 +32,20 @@ pub enum Cmds {
     /// List releases.
     List,
     /// Release status.
-    Status,
+    Status(StatusCommand),
     /// Start a new release process.
     Start(StartCommand),
     /// Continue the release process.
     Continue(ContinueCommand),
     /// Finish the release process.
     Finish(FinishCommand),
+}
+
+#[derive(clap::Args)]
+pub struct StatusCommand {
+    /// Version for which to obtain status
+    #[arg(value_name = "VERSION", short, long)]
+    version: Option<String>,
 }
 
 #[derive(clap::Args)]
@@ -70,7 +77,7 @@ pub struct FinishCommand {
     version: Option<String>,
 }
 
-pub fn handle_cmds(cmd: &Cmds) {
+pub async fn handle_cmds(cmd: &Cmds) {
     let path = match std::env::current_dir() {
         Ok(p) => p,
         Err(e) => {
@@ -112,9 +119,20 @@ pub fn handle_cmds(cmd: &Cmds) {
         Cmds::Info => {
             infoln!("Obtain workspace release info");
         }
-        Cmds::Status => {
+        Cmds::Status(status_cmd) => {
             log::debug!("Obtain release status");
-            release.status();
+            let version = match check_version_against_state(&release.state, &status_cmd.version) {
+                Ok(v) => v,
+                Err(CmdVersionError::VersionNotProvidedError) => {
+                    errorln!("Must provide a version, or have a release state initiated!");
+                    return;
+                }
+                Err(_) => {
+                    // all other errors are output by the check functions.
+                    return;
+                }
+            };
+            release.status(&version).await;
         }
         Cmds::Start(start_cmd) => {
             infoln!(

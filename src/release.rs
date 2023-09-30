@@ -16,12 +16,14 @@ use std::path::PathBuf;
 
 use crate::version::Version;
 use crate::ws::workspace::Workspace;
+use crate::{boomln, infoln};
 
 pub mod cmds;
 mod common;
 pub mod errors;
 mod list;
 mod process;
+mod status;
 mod sync;
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -112,23 +114,25 @@ impl Release {
         Ok(())
     }
 
-    pub fn status(self: &Self) {
-        log::debug!("Show release status");
-
-        if self.state.is_none() {
-            println!("Release not defined");
-            return;
-        }
+    pub async fn status(self: &Self, version: &Version) {
+        infoln!("Show release status for version {}", version);
 
         match self.ws.sync() {
             Ok(_) => {}
             Err(_) => {
-                log::error!("Error synchronizing workspace!");
+                boomln!("Error synchronizing workspace!");
                 return;
             }
         };
 
-        let state = self.state.as_ref().unwrap();
-        println!("Release version: {}", state.release_version);
+        let release_versions = common::get_release_versions(&self.ws, version);
+        if release_versions.contains_key(&version.get_version_id()) {
+            infoln!("Release version {} already exists.", version);
+        } else if release_versions.len() == 0 {
+            infoln!("Release version {} has not been started yet.", version);
+            return;
+        };
+
+        status::status(&self.ws, &release_versions).await;
     }
 }
