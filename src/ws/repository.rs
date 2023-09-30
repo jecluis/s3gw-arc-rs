@@ -228,10 +228,7 @@ impl Repository {
         let git = match git::repo::GitRepo::open(&self.path) {
             Ok(v) => v,
             Err(()) => {
-                boomln!(format!(
-                    "Unable to open git repository at '{}'",
-                    self.path.display()
-                ));
+                boomln!("Unable to open git repository at '{}'", self.path.display());
                 return Err(RepositoryError::UnableToOpenRepositoryError);
             }
         };
@@ -428,10 +425,7 @@ impl Repository {
         let refs = match self.get_git_refs() {
             Ok(r) => r,
             Err(()) => {
-                boomln!(format!(
-                    "Unable to obtain git refs for repository '{}'",
-                    self.name
-                ));
+                boomln!("Unable to obtain git refs for repository '{}'", self.name);
                 return Err(());
             }
         };
@@ -587,10 +581,7 @@ impl Repository {
         let branch_str = self.version_to_str(&base_ver, false);
         let ref_entry = match heads.iter().find(|e| e.name == branch_str) {
             None => {
-                errorln!(format!(
-                    "Unable to find branch '{}' local or remote",
-                    branch_str
-                ));
+                errorln!("Unable to find branch '{}' local or remote", branch_str);
                 return Err(());
             }
             Some(e) => e,
@@ -599,10 +590,7 @@ impl Repository {
         let git = match git::repo::GitRepo::open(&self.path) {
             Ok(v) => v,
             Err(()) => {
-                boomln!(format!(
-                    "Unable to open git repository at '{}'",
-                    self.path.display()
-                ));
+                boomln!("Unable to open git repository at '{}'", self.path.display());
                 return Err(());
             }
         };
@@ -611,10 +599,10 @@ impl Repository {
             // must fetch branch prior to checkout
             match git.fetch(&format!("refs/heads/{}", branch_str), &branch_str) {
                 Ok(()) => {
-                    successln!(format!("Successfully fetched '{}'", branch_str));
+                    successln!("Successfully fetched '{}'", branch_str);
                 }
                 Err(()) => {
-                    errorln!(format!("Error fetching '{}'", branch_str));
+                    errorln!("Error fetching '{}'", branch_str);
                     return Err(());
                 }
             };

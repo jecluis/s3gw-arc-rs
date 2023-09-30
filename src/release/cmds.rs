@@ -117,10 +117,10 @@ pub fn handle_cmds(cmd: &Cmds) {
             release.status();
         }
         Cmds::Start(start_cmd) => {
-            infoln!(format!(
+            infoln!(
                 "Start a new release process for version {}",
                 start_cmd.version
-            ));
+            );
             let version = match crate::version::Version::from_str(&start_cmd.version) {
                 Ok(v) => v,
                 Err(_) => {
@@ -138,20 +138,18 @@ pub fn handle_cmds(cmd: &Cmds) {
                 if s.release_version == version {
                     infoln!("Maybe you want to 'continue' instead?");
                 } else {
-                    infoln!(format!(
+                    infoln!(
                         "Detected version {}, attempting to start {}!",
-                        s.release_version, version
-                    ));
+                        s.release_version,
+                        version
+                    );
                 }
                 return;
             }
 
             match crate::release::process::start::start(&mut release, &version, &start_cmd.notes) {
                 Ok(()) => {
-                    successln!(format!(
-                        "Release for version {} successfully started!",
-                        &version
-                    ));
+                    successln!("Release for version {} successfully started!", &version);
                 }
                 Err(()) => {
                     boomln!("Error starting new release!");
@@ -175,17 +173,17 @@ pub fn handle_cmds(cmd: &Cmds) {
                 return;
             }
 
-            infoln!(format!("Continue a release process for version {}", relver));
+            infoln!("Continue a release process for version {}", relver);
             match crate::release::process::cont::continue_release(
                 &mut release,
                 &relver,
                 &continue_cmd.notes,
             ) {
                 Ok(()) => {
-                    successln!(format!("Release {} successfully continued.", relver));
+                    successln!("Release {} successfully continued.", relver);
                 }
                 Err(err) => {
-                    boomln!(format!("Error continuing release: {}", err));
+                    boomln!("Error continuing release: {}", err);
                 }
             };
         }
@@ -202,13 +200,13 @@ pub fn handle_cmds(cmd: &Cmds) {
                 }
             };
 
-            infoln!(format!("Finish release process for version {}", relver));
+            infoln!("Finish release process for version {}", relver);
             match crate::release::process::finish::finish(&mut release, &relver) {
                 Ok(()) => {
-                    successln!(format!("Finished release {}!", relver));
+                    successln!("Finished release {}!", relver);
                 }
                 Err(err) => {
-                    boomln!(format!("Error finishing release: {}", err));
+                    boomln!("Error finishing release: {}", err);
                 }
             };
         }
@@ -221,10 +219,10 @@ pub fn handle_cmds(cmd: &Cmds) {
 
 fn check_notes_file(notes: &PathBuf) -> bool {
     if !notes.exists() {
-        errorln!(format!(
+        errorln!(
             "Release Notes file at '{}; does not exist!",
             notes.display()
-        ));
+        );
         return false;
     }
     match notes.extension() {
@@ -251,7 +249,7 @@ fn check_version_against_state(
         Some(v) => match Version::from_str(v) {
             Ok(r) => Some(r),
             Err(()) => {
-                boomln!(format!("Unable to parse provided version '{}'", v));
+                boomln!("Unable to parse provided version '{}'", v);
                 return Err(CmdVersionError::UnableToParseError);
             }
         },
@@ -259,10 +257,10 @@ fn check_version_against_state(
 
     if let Some(v) = &state {
         if cmd_relver.is_some() {
-            errorln!(format!(
+            errorln!(
                 "Release state already found for version {}, but version provided.",
                 v.release_version
-            ));
+            );
             return Err(CmdVersionError::StateFoundError);
         }
     }

@@ -55,7 +55,7 @@ pub fn start(release: &mut Release, version: &Version, notes: &PathBuf) -> Resul
     let mut avail_it = avail.iter();
 
     if avail_it.any(|(_, ver)| ver == version) {
-        warnln!(format!("Version {} has already been released.", version));
+        warnln!("Version {} has already been released.", version);
         return Err(());
     }
 
@@ -64,14 +64,11 @@ pub fn start(release: &mut Release, version: &Version, notes: &PathBuf) -> Resul
     // every repository. For now we will ignore this bit.
 
     if avail_it.count() > 0 {
-        warnln!(format!(
-            "Release version {} has already been started.",
-            version
-        ));
+        warnln!("Release version {} has already been started.", version);
         return Err(());
     }
 
-    infoln!(format!("Start releasing version {}", version));
+    infoln!("Start releasing version {}", version);
 
     match create_release_branches(&ws, &version) {
         Ok(true) => {
@@ -118,23 +115,17 @@ pub fn start(release: &mut Release, version: &Version, notes: &PathBuf) -> Resul
                     // somehow this is not an "-rc1", which is unexpected
                     // given we are just starting a new release. Consider
                     // release corrupted!
-                    boomln!(format!(
-                        "Release is corrupted. Expected '-rc1', got '-rc{}'!",
-                        rc
-                    ));
+                    boomln!("Release is corrupted. Expected '-rc1', got '-rc{}'!", rc);
                     return Err(());
                 }
             } else {
                 // expected an RC and didn't get one! Something is wrong!
-                errorln!(format!(
-                    "Started release is not a release candidate. Got '{}'.",
-                    ver
-                ));
+                errorln!("Started release is not a release candidate. Got '{}'.", ver);
                 return Err(());
             }
         }
         Err(err) => {
-            errorln!(format!("Unable to start v{}-rc1: {}", version, err));
+            errorln!("Unable to start v{}-rc1: {}", version, err);
             return Err(());
         }
     };
@@ -205,7 +196,7 @@ fn maybe_cut_branches<'a>(
         return Err(ReleaseError::CorruptedError);
     }
 
-    infoln!(format!(
+    infoln!(
         "Need to cut release branches for v{} on repositories {}",
         base_version,
         repos_to_cut
@@ -213,7 +204,7 @@ fn maybe_cut_branches<'a>(
             .map(|x: &&Repository| x.name.clone())
             .collect::<Vec<String>>()
             .join(", ")
-    ));
+    );
     match inquire::Confirm::new("Cut required branches?")
         .with_default(true)
         .prompt()
@@ -279,21 +270,15 @@ pub fn start_release_candidate(
     let mut next_ver = relver.clone();
     next_ver.rc = Some(next_rc);
 
-    infoln!(format!(
-        "Start next release candidate '{}': {}",
-        next_rc, next_ver
-    ));
+    infoln!("Start next release candidate '{}': {}", next_rc, next_ver);
 
     match perform_release(&ws, &relver, &next_ver, &notes) {
         Ok(()) => {
-            successln!(format!(
-                "Started release ver '{}' tag '{}'",
-                relver, next_ver
-            ));
+            successln!("Started release ver '{}' tag '{}'", relver, next_ver);
             Ok(next_ver)
         }
         Err(err) => {
-            errorln!(format!("Error performing release {}: {}", next_ver, err));
+            errorln!("Error performing release {}: {}", next_ver, err);
             Err(err)
         }
     }
@@ -354,10 +339,7 @@ pub fn perform_release(
                 (tag_name, tag_oid)
             }
             Err(()) => {
-                errorln!(format!(
-                    "Error tagging version '{}' with '{}'",
-                    relver, next_ver
-                ));
+                errorln!("Error tagging version '{}' with '{}'", relver, next_ver);
                 return Err(ReleaseError::UnknownError);
             }
         };
@@ -375,10 +357,7 @@ pub fn perform_release(
                 log::debug!("Pushed '{}' to repository '{}'", relver, entry.name);
             }
             Err(()) => {
-                errorln!(format!(
-                    "Error pushing '{}' to repository '{}'!",
-                    relver, entry.name
-                ));
+                errorln!("Error pushing '{}' to repository '{}'!", relver, entry.name);
                 return Err(ReleaseError::UnknownError);
             }
         };
@@ -392,10 +371,11 @@ pub fn perform_release(
                 log::debug!("Pushed '{}' to repository '{}'!", next_ver, entry.name);
             }
             Err(()) => {
-                errorln!(format!(
+                errorln!(
                     "Error pushing '{}' to repository '{}'!",
-                    next_ver, entry.name
-                ));
+                    next_ver,
+                    entry.name
+                );
                 return Err(ReleaseError::UnknownError);
             }
         };
@@ -409,7 +389,7 @@ pub fn perform_release(
     for entry in &submodules {
         let tag_name = match &entry.tag_name {
             None => {
-                errorln!(format!("Tag name for submodule '{}' not set!", entry.name));
+                errorln!("Tag name for submodule '{}' not set!", entry.name);
                 return Err(ReleaseError::UnknownError);
             }
             Some(n) => n,
@@ -424,7 +404,7 @@ pub fn perform_release(
                 p
             }
             Err(()) => {
-                errorln!(format!("Error updating submodule '{}'", entry.name));
+                errorln!("Error updating submodule '{}'", entry.name);
                 return Err(ReleaseError::UnknownError);
             }
         };
@@ -441,12 +421,12 @@ pub fn perform_release(
         match std::fs::copy(&notes_file, &release_file_path) {
             Ok(_) => {}
             Err(err) => {
-                boomln!(format!(
+                boomln!(
                     "Error copying notes file from '{}' to '{}': {}",
                     notes_file.display(),
                     release_file_path.display(),
                     err
-                ));
+                );
             }
         };
         paths_to_add.push(release_notes_path);
@@ -474,10 +454,7 @@ pub fn perform_release(
             log::debug!("Committed release '{}' tag '{}'", relver, next_ver);
         }
         Err(()) => {
-            errorln!(format!(
-                "Unable to commit release '{}' tag '{}'",
-                relver, next_ver
-            ));
+            errorln!("Unable to commit release '{}' tag '{}'", relver, next_ver);
         }
     };
 
@@ -487,10 +464,7 @@ pub fn perform_release(
             log::debug!("Pushed s3gw release branch for '{}'", relver);
         }
         Err(()) => {
-            errorln!(format!(
-                "Error pushing s3gw release branch for '{}'",
-                relver
-            ));
+            errorln!("Error pushing s3gw release branch for '{}'", relver);
             return Err(ReleaseError::UnknownError);
         }
     };
@@ -504,10 +478,11 @@ pub fn perform_release(
             );
         }
         Err(()) => {
-            errorln!(format!(
+            errorln!(
                 "Error pushing s3gw release tag '{}' for version '{}'",
-                next_ver, relver
-            ));
+                next_ver,
+                relver
+            );
             return Err(ReleaseError::UnknownError);
         }
     };

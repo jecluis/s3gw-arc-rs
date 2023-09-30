@@ -21,7 +21,7 @@ use super::Release;
 /// release branches, and synchronizing submodules.
 ///
 pub fn sync(release: &Release, relver: &Version) -> Result<(), ()> {
-    infoln!(format!("Synchronize state for release {}", relver));
+    infoln!("Synchronize state for release {}", relver);
 
     let ws = &release.ws;
     let base_ver = relver.get_base_version();
@@ -44,10 +44,11 @@ pub fn sync(release: &Release, relver: &Version) -> Result<(), ()> {
                 );
             }
             Err(()) => {
-                errorln!(format!(
+                errorln!(
                     "Unable to checkout branch for version '{}' on repository '{}'",
-                    base_ver, repo.name
-                ));
+                    base_ver,
+                    repo.name
+                );
                 return Err(());
             }
         };
@@ -59,7 +60,7 @@ pub fn sync(release: &Release, relver: &Version) -> Result<(), ()> {
                 log::debug!("sync for release, repo '{}' sync'ed", repo.name);
             }
             Err(()) => {
-                errorln!(format!("Unable to synchronize repository '{}'", repo.name));
+                errorln!("Unable to synchronize repository '{}'", repo.name);
                 return Err(());
             }
         };

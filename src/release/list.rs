@@ -51,10 +51,11 @@ pub fn list(ws: &Workspace) -> Result<(), ()> {
         let releases = match repo.get_releases() {
             Ok(v) => v,
             Err(err) => {
-                errorln!(format!(
+                errorln!(
                     "Unable to obtain releases for repository '{}': {}",
-                    repo.name, err
-                ));
+                    repo.name,
+                    err
+                );
                 return Err(());
             }
         };

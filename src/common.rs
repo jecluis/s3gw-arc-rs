@@ -16,52 +16,52 @@ use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 
 #[macro_export]
 macro_rules! warnln {
-    ($msg:expr) => {{
+    ($($t:tt)*) => {{
         extern crate colored;
         use colored::*;
-        println!("\u{26A0}\u{fe0f}  {}", $msg.magenta().bold());
-        log::warn!("{}", $msg);
+        println!("\u{26A0}\u{fe0f}  {}", format!($($t)*).magenta().bold());
+        log::warn!($($t)*);
     }};
 }
 
 #[macro_export]
 macro_rules! infoln {
-    ($msg:expr) => {{
+    ($($t:tt)*) => {{
         extern crate colored;
         use colored::*;
-        println!("\u{2139}\u{fe0f}  {}", $msg.cyan().bold());
-        log::info!("{}", $msg);
+        println!("\u{2139}\u{fe0f}  {}", format!($($t)*).cyan().bold());
+        log::info!($($t)*);
     }};
 }
 
 #[macro_export]
 macro_rules! boomln {
-    ($msg:expr) => {{
+    ($($t:tt)*) => {{
         extern crate colored;
         use colored::*;
-        println!("\u{1f4a5} {}", $msg.red().bold());
-        log::error!("{}", $msg);
+        println!("\u{1f4a5} {}", format!($($t)*).red().bold());
+        log::error!($($t)*);
     }};
 }
 
 #[macro_export]
 macro_rules! errorln {
-    ($msg:expr) => {{
+    ($($t:tt)*) => {{
         extern crate colored;
         use colored::*;
-        println!("\u{274c}  {}", $msg.red().bold());
-        log::error!("{}", $msg);
+        println!("\u{274c}  {}", format!($($t)*).red().bold());
+        log::error!($($t)*);
     }};
 }
 
 #[macro_export]
 macro_rules! successln {
-    ($msg:expr) => {
+    ($($t:tt)*) => {{
         extern crate colored;
         use colored::*;
-        println!("\u{2705} {}", $msg.green().bold());
-        log::info!("{}", $msg);
-    };
+        println!("\u{2705} {}", format!($($t)*).green().bold());
+        log::info!($($t)*);
+    }};
 }
 
 pub struct RepoSyncProgress {

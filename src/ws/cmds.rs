@@ -33,7 +33,7 @@ pub struct InitCommand {
 pub fn handle_cmds(cmd: &Cmds) {
     match cmd {
         Cmds::Init(init) => {
-            infoln!(format!("Create workspace at {}", init.path.display()));
+            infoln!("Create workspace at {}", init.path.display());
             match super::init::init(&init.path) {
                 Ok(_) => {
                     successln!("Success!");
@@ -51,14 +51,14 @@ pub fn handle_cmds(cmd: &Cmds) {
     let path = match std::env::current_dir() {
         Ok(p) => p,
         Err(e) => {
-            boomln!(format!("Unable to obtain current directory: {}", e));
+            boomln!("Unable to obtain current directory: {}", e);
             return;
         }
     };
     let _ws = match super::init::open(&path) {
         Ok(v) => v,
         Err(_) => {
-            errorln!(format!("Unable to open workspace at {}", path.display()));
+            errorln!("Unable to open workspace at {}", path.display());
             return;
         }
     };

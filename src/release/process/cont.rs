@@ -34,14 +34,14 @@ pub fn continue_release(
 
     let release_versions = crate::release::common::get_release_versions(&ws, &version);
     if release_versions.contains_key(&version.get_version_id()) {
-        errorln!(format!("Release version {} already exists", version));
+        errorln!("Release version {} already exists", version);
         return Err(ReleaseError::ReleaseExistsError);
     } else if release_versions.len() == 0 {
         errorln!("Release has not been started yet.");
         return Err(ReleaseError::NotStartedError);
     }
 
-    infoln!(format!("Continuing release {}", version));
+    infoln!("Continuing release {}", version);
 
     match sync::sync(&release, &version) {
         Ok(()) => {}
@@ -53,10 +53,10 @@ pub fn continue_release(
 
     match start::start_release_candidate(&ws, &version, Some(&notes)) {
         Ok(v) => {
-            successln!(format!("Continued release, created {}", v));
+            successln!("Continued release, created {}", v);
         }
         Err(err) => {
-            errorln!(format!("Error starting new release candidate: {}", err));
+            errorln!("Error starting new release candidate: {}", err);
             return Err(err);
         }
     };

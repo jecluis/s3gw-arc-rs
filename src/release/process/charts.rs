@@ -30,7 +30,7 @@ pub fn update_charts(repo: &Repository, version: &Version) -> Result<(), ChartsE
     }
 
     if let Err(err) = chart_update_version(&chart_path, &version) {
-        boomln!(format!("Unable to update chart version: {}", err));
+        boomln!("Unable to update chart version: {}", err);
         return Err(err);
     }
 
@@ -53,15 +53,12 @@ pub fn update_charts(repo: &Repository, version: &Version) -> Result<(), ChartsE
     {
         Ok(res) => {
             if !res.success() {
-                boomln!(format!(
-                    "Unable to commit chart update: {}",
-                    res.code().unwrap()
-                ));
+                boomln!("Unable to commit chart update: {}", res.code().unwrap());
                 return Err(ChartsError::UnknownError);
             }
         }
         Err(err) => {
-            boomln!(format!("Error committing chart update: {}", err));
+            boomln!("Error committing chart update: {}", err);
             return Err(ChartsError::UnknownError);
         }
     };
@@ -73,11 +70,11 @@ fn chart_update_version(chart_path: &PathBuf, version: &Version) -> Result<(), C
     let f = match std::fs::File::open(&chart_path) {
         Ok(f) => f,
         Err(err) => {
-            boomln!(format!(
+            boomln!(
                 "Unable to open chart file at '{}': {}",
                 chart_path.display(),
                 err
-            ));
+            );
             return Err(ChartsError::UnknownError);
         }
     };
@@ -91,7 +88,7 @@ fn chart_update_version(chart_path: &PathBuf, version: &Version) -> Result<(), C
     {
         Ok(f) => f,
         Err(err) => {
-            boomln!(format!("Unable to open tmp chart file: {}", err));
+            boomln!("Unable to open tmp chart file: {}", err);
             return Err(ChartsError::UnknownError);
         }
     };
@@ -104,7 +101,7 @@ fn chart_update_version(chart_path: &PathBuf, version: &Version) -> Result<(), C
         let mut line = match line_res {
             Ok(s) => s,
             Err(err) => {
-                boomln!(format!("Unable to obtain line from chart file: {}", err));
+                boomln!("Unable to obtain line from chart file: {}", err);
                 return Err(ChartsError::UnknownError);
             }
         };
@@ -124,22 +121,19 @@ fn chart_update_version(chart_path: &PathBuf, version: &Version) -> Result<(), C
         match writer.write(line.as_bytes()) {
             Ok(_) => {}
             Err(err) => {
-                boomln!(format!("Error writing to tmp charts file: {}", err));
+                boomln!("Error writing to tmp charts file: {}", err);
                 return Err(ChartsError::UnknownError);
             }
         };
     }
 
     if let Err(err) = std::fs::remove_file(&chart_path) {
-        boomln!(format!(
-            "Error removing charts file for replacement: {}",
-            err
-        ));
+        boomln!("Error removing charts file for replacement: {}", err);
         return Err(ChartsError::UnknownError);
     }
 
     if let Err(err) = std::fs::rename(&tmp_chart_path, &chart_path) {
-        boomln!(format!("Error renaming tmp charts file: {}", err));
+        boomln!("Error renaming tmp charts file: {}", err);
         return Err(ChartsError::UnknownError);
     }
 

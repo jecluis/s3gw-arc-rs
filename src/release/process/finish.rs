@@ -35,14 +35,14 @@ pub fn finish(release: &mut Release, version: &Version) -> Result<(), ReleaseErr
 
     let release_versions = crate::release::common::get_release_versions(&ws, &version);
     if release_versions.contains_key(&version.get_version_id()) {
-        errorln!(format!("Release version {} already exists", version));
+        errorln!("Release version {} already exists", version);
         return Err(ReleaseError::ReleaseExistsError);
     } else if release_versions.len() == 0 {
         errorln!("Release has not been started yet.");
         return Err(ReleaseError::NotStartedError);
     }
 
-    infoln!(format!("Continuing release {}", version));
+    infoln!("Continuing release {}", version);
 
     match sync::sync(&release, &version) {
         Ok(()) => {}
@@ -59,25 +59,25 @@ pub fn finish(release: &mut Release, version: &Version) -> Result<(), ReleaseErr
         }
         Some((_, v)) => v,
     };
-    infoln!(format!("Basing release on highest candidate: {}", max));
+    infoln!("Basing release on highest candidate: {}", max);
 
     // adjust charts version
 
-    infoln!(format!("Update chart to version {}", version));
+    infoln!("Update chart to version {}", version);
     if let Err(err) = charts::update_charts(&ws.repos.charts, &version) {
-        boomln!(format!("Error updating chart: {}", err));
+        boomln!("Error updating chart: {}", err);
         return Err(ReleaseError::UnknownError);
     }
 
     match start::perform_release(&ws, &version, &version, &None) {
         Ok(()) => {}
         Err(err) => {
-            errorln!(format!("Unable to finish release for {}: {}", version, err));
+            errorln!("Unable to finish release for {}: {}", version, err);
             return Err(err);
         }
     };
 
-    successln!(format!("Version {} released!", version));
+    successln!("Version {} released!", version);
 
     Ok(())
 }
