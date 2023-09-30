@@ -15,7 +15,14 @@
 use std::path::PathBuf;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+pub struct WSGitHubConfig {
+    pub org: String,
+    pub repo: String,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct WSGitRepoConfigValues {
+    pub github: Option<WSGitHubConfig>,
     pub readonly: String,
     pub readwrite: String,
     pub tag_pattern: String,
@@ -70,6 +77,10 @@ impl Default for WSConfig {
             user: WSUserConfig::default(),
             git: WSGitReposConfig {
                 s3gw: WSGitRepoConfigValues {
+                    github: Some(WSGitHubConfig {
+                        org: "aquarist-labs".into(),
+                        repo: "s3gw".into(),
+                    }),
                     readonly: String::from("https://github.com/aquarist-labs/s3gw.git"),
                     readwrite: String::from("git@github.com:aquarist-labs/s3gw.git"),
                     tag_pattern: String::from(r"^v(\d+\.\d+\.\d+.*)$"),
@@ -78,6 +89,10 @@ impl Default for WSConfig {
                     branch_format: String::from("s3gw-v{{major}}.{{minor}}"),
                 },
                 ceph: WSGitRepoConfigValues {
+                    github: Some(WSGitHubConfig {
+                        org: "aquarist-labs".into(),
+                        repo: "ceph".into(),
+                    }),
                     readonly: String::from("https://github.com/aquarist-labs/ceph.git"),
                     readwrite: String::from("git@github.com:aquarist-labs/ceph.git"),
                     tag_pattern: String::from(r"^s3gw-v(\d+\.\d+\.\d+.*)$"),
@@ -86,6 +101,10 @@ impl Default for WSConfig {
                     branch_format: String::from("s3gw-v{{major}}.{{minor}}"),
                 },
                 ui: WSGitRepoConfigValues {
+                    github: Some(WSGitHubConfig {
+                        org: "aquarist-labs".into(),
+                        repo: "s3gw-ui".into(),
+                    }),
                     readonly: String::from("https://github.com/aquarist-labs/s3gw-ui.git"),
                     readwrite: String::from("git@github.com:aquarist-labs/s3gw-ui.git"),
                     tag_pattern: String::from(r"^s3gw-v(\d+\.\d+\.\d+.*)$"),
@@ -94,6 +113,10 @@ impl Default for WSConfig {
                     branch_format: String::from("s3gw-v{{major}}.{{minor}}"),
                 },
                 charts: WSGitRepoConfigValues {
+                    github: Some(WSGitHubConfig {
+                        org: "aquarist-labs".into(),
+                        repo: "s3gw-charts".into(),
+                    }),
                     readonly: String::from("https://github.com/aquarist-labs/s3gw-charts.git"),
                     readwrite: String::from("git@github.com:aquarist-labs/s3gw-charts.git"),
                     tag_pattern: String::from(r"^s3gw-v(\d+\.\d+\.\d+.*)$"),

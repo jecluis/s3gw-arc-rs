@@ -15,7 +15,8 @@
 use inquire::{required, Confirm, Text};
 
 use super::config::{
-    WSConfig, WSGitRepoConfigValues, WSGitReposConfig, WSRegistryConfig, WSUserConfig,
+    WSConfig, WSGitHubConfig, WSGitRepoConfigValues, WSGitReposConfig, WSRegistryConfig,
+    WSUserConfig,
 };
 
 /// Prompt for a specific custom git repository. This is a helper function.
@@ -50,6 +51,7 @@ fn prompt_custom_git_repo_value(
     };
 
     Ok(Some(WSGitRepoConfigValues {
+        github: None,
         readonly: ro,
         readwrite: rw,
         tag_pattern: default.tag_pattern.clone(),
@@ -76,7 +78,16 @@ fn prompt_custom_github_repo_value(
         Err(_) => return Err(()),
     };
 
+    let gitless_repo = match repo.find(".git") {
+        None => repo.clone(),
+        Some(v) => repo[..v].into(), // grab slice, drop repo's '.git' suffix
+    };
+
     Ok(WSGitRepoConfigValues {
+        github: Some(WSGitHubConfig {
+            org: org.clone(),
+            repo: gitless_repo.clone(),
+        }),
         readonly: format!("https://github.com/{}/{}", org, repo),
         readwrite: format!("git@github.com:{}/{}", org, repo),
         tag_pattern: default.tag_pattern.clone(),
