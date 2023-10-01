@@ -25,7 +25,7 @@ use crate::{errorln, infoln, release::errors::ReleaseError, version::Version};
 pub async fn continue_release(
     release: &mut Release,
     version: &Version,
-    notes: &PathBuf,
+    notes: &Option<PathBuf>,
     force: bool,
 ) -> Result<(), ReleaseError> {
     // 1. check whether release has been finished
@@ -96,7 +96,7 @@ pub async fn continue_release(
         }
     };
 
-    match start::start_release_candidate(&ws, &version, Some(&notes)) {
+    match start::start_release_candidate(&ws, &version, notes.as_ref()) {
         Ok(v) => {
             successln!("Continued release, created {}", v);
         }

@@ -63,7 +63,7 @@ pub struct StartCommand {
 pub struct ContinueCommand {
     /// Release notes
     #[arg(value_name = "FILE", short, long)]
-    notes: PathBuf,
+    notes: Option<PathBuf>,
 
     /// Release version to continue (e.g., v0.17.1)
     #[arg(value_name = "VERSION", short, long)]
@@ -191,8 +191,10 @@ pub async fn handle_cmds(cmd: &Cmds) {
                 }
             };
 
-            if !check_notes_file(&continue_cmd.notes) {
-                return;
+            if let Some(n) = &continue_cmd.notes {
+                if !check_notes_file(&n) {
+                    return;
+                }
             }
 
             infoln!("Continue a release process for version {}", relver);
