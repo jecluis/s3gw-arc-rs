@@ -161,6 +161,20 @@ impl ReleaseWorkflowResult {
             started_at: res.run_started_at,
         }
     }
+
+    pub fn is_waiting(self: &Self) -> bool {
+        match &self.status {
+            ReleaseWorkflowStatus::INPROGRESS | ReleaseWorkflowStatus::QUEUED => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_failed(self: &Self) -> bool {
+        if self.is_waiting() {
+            return false;
+        }
+        self.success
+    }
 }
 
 pub async fn status(ws: &Workspace, releases: &BTreeMap<u64, Version>) {

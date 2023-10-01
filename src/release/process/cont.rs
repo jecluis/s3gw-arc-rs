@@ -20,6 +20,7 @@ use crate::release::status;
 use crate::release::sync;
 use crate::release::Release;
 use crate::successln;
+use crate::warnln;
 use crate::{errorln, infoln, release::errors::ReleaseError, version::Version};
 
 pub async fn continue_release(
@@ -84,10 +85,18 @@ pub async fn continue_release(
             }
         }
         Some(s) => {
-            if !s.success {
-                errorln!("Previous release candidate {} failed releasing!", last_rc);
+            if s.is_waiting() {
+                warnln!("Previous candidate {} still being released!", last_rc);
                 if force {
-                    infoln!("Continuing regardless because '--force' was specified.");
+                    warnln!("Continuing regardless because '--force' was specified.");
+                } else {
+                    infoln!("Specifify '--force' if you want to continue regardless.");
+                    return Err(ReleaseError::UnknownError);
+                }
+            } else if s.is_failed() {
+                errorln!("Previous candidate {} failed releasing!", last_rc);
+                if force {
+                    warnln!("Continuing regardless because '--force' was specified.");
                 } else {
                     infoln!("Specify '--force' if you want to continue nonetheless.");
                     return Err(ReleaseError::UnknownError);
