@@ -414,22 +414,38 @@ pub fn perform_release(
     infoln!("Finalizing release...");
     if let Some(notes_file) = notes {
         // copy release notes file to its final destination.
-        let release_notes_file = format!("s3gw-v{}.md", next_ver.get_release_version());
-        let release_notes_path = PathBuf::from("docs/release-notes").join(release_notes_file);
-        let release_file_path = ws.repos.s3gw.path.join(&release_notes_path);
+        let release_notes_dir = PathBuf::from("docs/release-notes");
+        let release_notes_file =
+            PathBuf::from(format!("s3gw-v{}.md", next_ver.get_release_version()));
+        let release_notes_path = release_notes_dir.join(&release_notes_file);
+        let release_notes_path_abs = ws.repos.s3gw.path.join(&release_notes_path);
+        let latest_path = release_notes_dir.join(PathBuf::from("latest"));
+        let latest_path_abs = ws.repos.s3gw.path.join(&latest_path);
 
-        match std::fs::copy(&notes_file, &release_file_path) {
+        match std::fs::copy(&notes_file, &release_notes_path_abs) {
             Ok(_) => {}
             Err(err) => {
                 boomln!(
                     "Error copying notes file from '{}' to '{}': {}",
                     notes_file.display(),
-                    release_file_path.display(),
+                    release_notes_path_abs.display(),
                     err
                 );
+                return Err(ReleaseError::UnknownError);
+            }
+        };
+        if latest_path_abs.is_symlink() {
+            std::fs::remove_file(&latest_path_abs).expect("Unable to remove 'latest' symlink!");
+        }
+        match std::os::unix::fs::symlink(&release_notes_file, &latest_path_abs) {
+            Ok(_) => {}
+            Err(err) => {
+                boomln!("Error updating 'latest' symlink: {}", err);
+                return Err(ReleaseError::UnknownError);
             }
         };
         paths_to_add.push(release_notes_path);
+        paths_to_add.push(latest_path);
     }
 
     match ws.repos.s3gw.stage_paths(&paths_to_add) {
