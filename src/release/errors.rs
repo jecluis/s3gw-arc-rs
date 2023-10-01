@@ -28,6 +28,11 @@ pub enum ReleaseError {
     TaggingError,
     SyncError,
 
+    // github release build process
+    ReleaseBuildOnGoingError,
+    ReleaseBuildFailedError,
+    ReleaseBuildNotFoundError,
+
     UnknownError,
 }
 
@@ -45,6 +50,11 @@ impl Display for ReleaseError {
             ReleaseError::SubmoduleError => "submodule error",
             ReleaseError::TaggingError => "error tagging release",
             ReleaseError::SyncError => "error synchronizing",
+            // github release build process
+            ReleaseError::ReleaseBuildOnGoingError => "release build in progress",
+            ReleaseError::ReleaseBuildFailedError => "release build failed",
+            ReleaseError::ReleaseBuildNotFoundError => "release build not found",
+            // unknown error
             ReleaseError::UnknownError => "unknown error",
         })
     }

@@ -14,15 +14,18 @@
 
 use crate::{
     boomln, errorln, infoln,
-    release::process::{charts, start},
     release::sync,
+    release::{
+        errors::ReleaseResult,
+        process::{charts, start},
+    },
     successln,
     version::Version,
 };
 
 use crate::release::{errors::ReleaseError, Release};
 
-pub fn finish(release: &mut Release, version: &Version) -> Result<(), ReleaseError> {
+pub fn finish(release: &mut Release, version: &Version) -> ReleaseResult<()> {
     // 1. check whether release has been finished
     // 2. check whether release has been started
     // 3. sync repositories for the specified release
@@ -48,7 +51,7 @@ pub fn finish(release: &mut Release, version: &Version) -> Result<(), ReleaseErr
         Ok(()) => {}
         Err(()) => {
             errorln!("Unable to sync release!");
-            return Err(ReleaseError::UnknownError);
+            return Err(ReleaseError::SyncError);
         }
     };
 

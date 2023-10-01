@@ -15,6 +15,7 @@
 use std::path::PathBuf;
 
 use crate::boomln;
+use crate::release::errors::ReleaseResult;
 use crate::release::process::start;
 use crate::release::status;
 use crate::release::sync;
@@ -28,7 +29,7 @@ pub async fn continue_release(
     version: &Version,
     notes: &Option<PathBuf>,
     force: bool,
-) -> Result<(), ReleaseError> {
+) -> ReleaseResult<()> {
     // 1. check whether release has been finished
     // 2. check whether release has been started
     // 3. sync repositories for the specified release
@@ -52,7 +53,7 @@ pub async fn continue_release(
         Ok(()) => {}
         Err(()) => {
             errorln!("Unable to sync release!");
-            return Err(ReleaseError::UnknownError);
+            return Err(ReleaseError::SyncError);
         }
     };
 
@@ -81,7 +82,7 @@ pub async fn continue_release(
                 infoln!("Continuing regardless because '--force' was specified.");
             } else {
                 infoln!("Specify '--force' if you want to continue nonetheless.");
-                return Err(ReleaseError::UnknownError);
+                return Err(ReleaseError::ReleaseBuildNotFoundError);
             }
         }
         Some(s) => {
@@ -91,7 +92,7 @@ pub async fn continue_release(
                     warnln!("Continuing regardless because '--force' was specified.");
                 } else {
                     infoln!("Specifify '--force' if you want to continue regardless.");
-                    return Err(ReleaseError::UnknownError);
+                    return Err(ReleaseError::ReleaseBuildOnGoingError);
                 }
             } else if s.is_failed() {
                 errorln!("Previous candidate {} failed releasing!", last_rc);
@@ -99,7 +100,7 @@ pub async fn continue_release(
                     warnln!("Continuing regardless because '--force' was specified.");
                 } else {
                     infoln!("Specify '--force' if you want to continue nonetheless.");
-                    return Err(ReleaseError::UnknownError);
+                    return Err(ReleaseError::ReleaseBuildFailedError);
                 }
             }
         }
