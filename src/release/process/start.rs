@@ -63,7 +63,7 @@ pub fn start(release: &mut Release, version: &Version, notes: &PathBuf) -> Resul
     // the repositories. This can be done by checking for rc versions on
     // every repository. For now we will ignore this bit.
 
-    if avail_it.count() > 0 {
+    if avail.len() > 0 {
         warnln!("Release version {} has already been started.", version);
         return Err(());
     }
