@@ -18,11 +18,15 @@ use std::io::BufWriter;
 use std::io::Write;
 use std::path::PathBuf;
 
+use crate::release::errors::ChartsResult;
 use crate::{boomln, version::Version, ws::repository::Repository};
 
 use crate::release::errors::ChartsError;
 
-pub fn update_charts(repo: &Repository, version: &Version) -> Result<(), ChartsError> {
+/// Update the Helm chart to the provided version. Ensures the result is
+/// committed.
+///
+pub fn update_charts(repo: &Repository, version: &Version) -> ChartsResult<()> {
     let chart_path_rel = PathBuf::from("charts/s3gw/Chart.yaml");
     let chart_path = repo.path.join(&chart_path_rel);
     if !chart_path.exists() {
@@ -36,7 +40,7 @@ pub fn update_charts(repo: &Repository, version: &Version) -> Result<(), ChartsE
 
     if let Err(()) = repo.stage_paths(&vec![chart_path_rel]) {
         boomln!("Unable to stage chart changes!");
-        return Err(ChartsError::UnknownError);
+        return Err(ChartsError::StagingError);
     }
 
     match std::process::Command::new("git")
@@ -59,14 +63,19 @@ pub fn update_charts(repo: &Repository, version: &Version) -> Result<(), ChartsE
         }
         Err(err) => {
             boomln!("Error committing chart update: {}", err);
-            return Err(ChartsError::UnknownError);
+            return Err(ChartsError::CommitError);
         }
     };
 
     Ok(())
 }
 
-fn chart_update_version(chart_path: &PathBuf, version: &Version) -> Result<(), ChartsError> {
+/// Helper function. Replaces the existing version of the chart with the
+/// provided version. This is achieved by writing a copy of the chart to a
+/// temporary file, containing the new version, and replacing the chart file
+/// in the end.
+///
+fn chart_update_version(chart_path: &PathBuf, version: &Version) -> ChartsResult<()> {
     let f = match std::fs::File::open(&chart_path) {
         Ok(f) => f,
         Err(err) => {
@@ -102,7 +111,7 @@ fn chart_update_version(chart_path: &PathBuf, version: &Version) -> Result<(), C
             Ok(s) => s,
             Err(err) => {
                 boomln!("Unable to obtain line from chart file: {}", err);
-                return Err(ChartsError::UnknownError);
+                return Err(ChartsError::ParsingError);
             }
         };
 
@@ -111,7 +120,7 @@ fn chart_update_version(chart_path: &PathBuf, version: &Version) -> Result<(), C
                 Ok(v) => v,
                 Err(()) => {
                     boomln!("Unable to parse current charts version!");
-                    return Err(ChartsError::UnknownError);
+                    return Err(ChartsError::ParsingError);
                 }
             };
             log::debug!("chart version: cur {} next {}", cur_ver, version);

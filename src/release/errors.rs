@@ -65,6 +65,9 @@ pub type ReleaseResult<T> = Result<T, ReleaseError>;
 #[derive(Clone, Copy, Debug)]
 pub enum ChartsError {
     DoesNotExistError,
+    ParsingError,
+    StagingError,
+    CommitError,
 
     UnknownError,
 }
@@ -73,7 +76,12 @@ impl Display for ChartsError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
             ChartsError::DoesNotExistError => "chart file does not exist",
+            ChartsError::ParsingError => "error parsing chart file",
+            ChartsError::StagingError => "error staging chart file for commit",
+            ChartsError::CommitError => "error committing chart file",
             ChartsError::UnknownError => "unknown error",
         })
     }
 }
+
+pub type ChartsResult<T> = Result<T, ChartsError>;
