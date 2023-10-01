@@ -340,7 +340,7 @@ pub fn perform_release(
             }
             Err(()) => {
                 errorln!("Error tagging version '{}' with '{}'", relver, next_ver);
-                return Err(ReleaseError::UnknownError);
+                return Err(ReleaseError::TaggingError);
             }
         };
         entry.tag_oid = Some(tag_oid);
@@ -358,7 +358,7 @@ pub fn perform_release(
             }
             Err(()) => {
                 errorln!("Error pushing '{}' to repository '{}'!", relver, entry.name);
-                return Err(ReleaseError::UnknownError);
+                return Err(ReleaseError::PushingError);
             }
         };
 
@@ -376,7 +376,7 @@ pub fn perform_release(
                     next_ver,
                     entry.name
                 );
-                return Err(ReleaseError::UnknownError);
+                return Err(ReleaseError::PushingError);
             }
         };
     }
@@ -390,7 +390,7 @@ pub fn perform_release(
         let tag_name = match &entry.tag_name {
             None => {
                 errorln!("Tag name for submodule '{}' not set!", entry.name);
-                return Err(ReleaseError::UnknownError);
+                return Err(ReleaseError::SubmoduleError);
             }
             Some(n) => n,
         };
@@ -405,7 +405,7 @@ pub fn perform_release(
             }
             Err(()) => {
                 errorln!("Error updating submodule '{}'", entry.name);
-                return Err(ReleaseError::UnknownError);
+                return Err(ReleaseError::SubmoduleError);
             }
         };
         paths_to_add.push(path);
@@ -461,7 +461,7 @@ pub fn perform_release(
         }
         Err(()) => {
             log::error!("Error staging paths!");
-            return Err(ReleaseError::UnknownError);
+            return Err(ReleaseError::StagingError);
         }
     };
 
@@ -471,6 +471,7 @@ pub fn perform_release(
         }
         Err(()) => {
             errorln!("Unable to commit release '{}' tag '{}'", relver, next_ver);
+            return Err(ReleaseError::CommittingError);
         }
     };
 
@@ -481,7 +482,7 @@ pub fn perform_release(
         }
         Err(()) => {
             errorln!("Error pushing s3gw release branch for '{}'", relver);
-            return Err(ReleaseError::UnknownError);
+            return Err(ReleaseError::PushingError);
         }
     };
 
@@ -499,7 +500,7 @@ pub fn perform_release(
                 next_ver,
                 relver
             );
-            return Err(ReleaseError::UnknownError);
+            return Err(ReleaseError::PushingError);
         }
     };
 

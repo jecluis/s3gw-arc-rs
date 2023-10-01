@@ -20,6 +20,11 @@ pub enum ReleaseError {
     CorruptedError,
     NotStartedError,
     ReleaseExistsError,
+    StagingError,
+    CommittingError,
+    PushingError,
+    SubmoduleError,
+    TaggingError,
 
     UnknownError,
 }
@@ -31,6 +36,11 @@ impl Display for ReleaseError {
             ReleaseError::CorruptedError => "corrupted release",
             ReleaseError::NotStartedError => "release not started",
             ReleaseError::ReleaseExistsError => "release already exists",
+            ReleaseError::StagingError => "error staging files",
+            ReleaseError::CommittingError => "error committing",
+            ReleaseError::PushingError => "error pushing to remote",
+            ReleaseError::SubmoduleError => "submodule error",
+            ReleaseError::TaggingError => "error tagging release",
             ReleaseError::UnknownError => "unknown error",
         })
     }
