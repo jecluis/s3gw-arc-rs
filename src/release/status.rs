@@ -75,6 +75,7 @@ impl ReleaseWorkflowStatus {
 }
 
 pub struct ReleaseWorkflowResult {
+    pub tag: String,
     pub status: ReleaseWorkflowStatus,
     pub success: bool,
     pub created_at: chrono::DateTime<chrono::Utc>,
@@ -144,7 +145,15 @@ impl ReleaseWorkflowResult {
             },
         };
 
+        let tag = match &res.head_branch {
+            Some(v) => v.clone(),
+            None => {
+                panic!("Expected head branch name on workflow result!");
+            }
+        };
+
         ReleaseWorkflowResult {
+            tag,
             status,
             success,
             created_at: res.created_at,
@@ -176,42 +185,18 @@ fn basic_status(releases: &BTreeMap<u64, Version>) {
 }
 
 async fn github_status(ws: &Workspace, releases: &BTreeMap<u64, Version>) {
-    let github_config = match &ws.repos.s3gw.config.github {
-        Some(c) => c,
-        None => {
-            boomln!("Expected github repository config, found none!");
-            panic!();
-        }
-    };
-    let github_token = &ws.config.user.github_token;
-
     for relver in releases.values() {
-        let tag = format!(
-            "{}{}",
-            relver.to_str_fmt(&ws.repos.s3gw.config.tag_format),
-            match relver.rc {
-                None => "".into(),
-                Some(v) => format!("-rc{}", v),
-            }
-        );
-
-        let latest_run = match github_get_latest_release_workflow(
-            &github_config.org,
-            &github_config.repo,
-            &github_token,
-            &tag,
-        )
-        .await
-        {
+        let latest_run = match get_release_status(&ws, &relver).await {
             Ok(v) => v,
             Err(()) => {
-                log::error!("Unable to obtain latest workflow for tag '{}'", tag);
+                boomln!("Unable to obtain latest workflow for version {}", relver);
                 return;
             }
         };
 
         if latest_run.is_some() {
-            show_run_status(&tag, &latest_run.unwrap());
+            let run = latest_run.unwrap();
+            show_run_status(&run.tag, &run);
         }
     }
 }
@@ -295,6 +280,31 @@ pub async fn github_get_latest_release_workflow(
         None => Ok(None),
         Some(v) => Ok(Some(ReleaseWorkflowResult::from_github_result(&v))),
     }
+}
+
+pub async fn get_release_status(
+    ws: &Workspace,
+    relver: &Version,
+) -> Result<Option<ReleaseWorkflowResult>, ()> {
+    let github_config = match &ws.repos.s3gw.config.github {
+        Some(c) => c,
+        None => {
+            errorln!("Expected github repository config, found none!");
+            return Err(());
+        }
+    };
+    let github_token = &ws.config.user.github_token;
+    let tag = format!(
+        "{}{}",
+        relver.to_str_fmt(&ws.repos.s3gw.config.tag_format),
+        match relver.rc {
+            None => "".into(),
+            Some(v) => format!("-rc{}", v),
+        }
+    );
+
+    github_get_latest_release_workflow(&github_config.org, &github_config.repo, &github_token, &tag)
+        .await
 }
 
 fn show_run_status(tag: &String, run: &ReleaseWorkflowResult) {
