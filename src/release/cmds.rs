@@ -173,8 +173,8 @@ pub async fn handle_cmds(cmd: &Cmds) {
                 Ok(()) => {
                     successln!("Release for version {} successfully started!", &version);
                 }
-                Err(()) => {
-                    boomln!("Error starting new release!");
+                Err(err) => {
+                    boomln!("Error starting new release: {}", err);
                 }
             };
         }

@@ -15,6 +15,7 @@
 use std::path::PathBuf;
 
 use crate::release::common::get_release_versions;
+use crate::release::errors::ReleaseResult;
 use crate::version::Version;
 use crate::ws::workspace::Workspace;
 use crate::{
@@ -34,7 +35,7 @@ struct SubmoduleInfo<'a> {
     push_rc_tags: bool,
 }
 
-pub fn start(release: &mut Release, version: &Version, notes: &PathBuf) -> Result<(), ()> {
+pub fn start(release: &mut Release, version: &Version, notes: &PathBuf) -> ReleaseResult<()> {
     // 1. sync rw repos to force authorized connect
     // 2. check all repos for existing versions
     // 2.1. make sure this version has not been started in any of the
@@ -47,7 +48,7 @@ pub fn start(release: &mut Release, version: &Version, notes: &PathBuf) -> Resul
         Ok(()) => {}
         Err(()) => {
             log::error!("Unable to synchronize workspace repositories!");
-            return Err(());
+            return Err(ReleaseError::SyncError);
         }
     };
 
@@ -56,7 +57,7 @@ pub fn start(release: &mut Release, version: &Version, notes: &PathBuf) -> Resul
 
     if avail_it.any(|(_, ver)| ver == version) {
         warnln!("Version {} has already been released.", version);
-        return Err(());
+        return Err(ReleaseError::ReleaseExistsError);
     }
 
     // NOTE(joao): we should check whether there is a started release across
@@ -65,7 +66,7 @@ pub fn start(release: &mut Release, version: &Version, notes: &PathBuf) -> Resul
 
     if avail.len() > 0 {
         warnln!("Release version {} has already been started.", version);
-        return Err(());
+        return Err(ReleaseError::ReleaseStartedError);
     }
 
     infoln!("Start releasing version {}", version);
@@ -79,7 +80,7 @@ pub fn start(release: &mut Release, version: &Version, notes: &PathBuf) -> Resul
         }
         Err(()) => {
             errorln!("Error creating release!");
-            return Err(());
+            return Err(ReleaseError::UnknownError);
         }
     };
 
@@ -93,7 +94,7 @@ pub fn start(release: &mut Release, version: &Version, notes: &PathBuf) -> Resul
         Ok(()) => {}
         Err(()) => {
             boomln!("Unable to write release state file!");
-            return Err(());
+            return Err(ReleaseError::UnknownError);
         }
     };
 
@@ -103,7 +104,7 @@ pub fn start(release: &mut Release, version: &Version, notes: &PathBuf) -> Resul
         }
         Err(()) => {
             errorln!("Unable to synchronize release repositories!");
-            return Err(());
+            return Err(ReleaseError::SyncError);
         }
     };
 
@@ -116,17 +117,17 @@ pub fn start(release: &mut Release, version: &Version, notes: &PathBuf) -> Resul
                     // given we are just starting a new release. Consider
                     // release corrupted!
                     boomln!("Release is corrupted. Expected '-rc1', got '-rc{}'!", rc);
-                    return Err(());
+                    return Err(ReleaseError::CorruptedError);
                 }
             } else {
                 // expected an RC and didn't get one! Something is wrong!
                 errorln!("Started release is not a release candidate. Got '{}'.", ver);
-                return Err(());
+                return Err(ReleaseError::CorruptedError);
             }
         }
         Err(err) => {
             errorln!("Unable to start v{}-rc1: {}", version, err);
-            return Err(());
+            return Err(err);
         }
     };
 

@@ -20,11 +20,13 @@ pub enum ReleaseError {
     CorruptedError,
     NotStartedError,
     ReleaseExistsError,
+    ReleaseStartedError,
     StagingError,
     CommittingError,
     PushingError,
     SubmoduleError,
     TaggingError,
+    SyncError,
 
     UnknownError,
 }
@@ -36,15 +38,19 @@ impl Display for ReleaseError {
             ReleaseError::CorruptedError => "corrupted release",
             ReleaseError::NotStartedError => "release not started",
             ReleaseError::ReleaseExistsError => "release already exists",
+            ReleaseError::ReleaseStartedError => "release already started",
             ReleaseError::StagingError => "error staging files",
             ReleaseError::CommittingError => "error committing",
             ReleaseError::PushingError => "error pushing to remote",
             ReleaseError::SubmoduleError => "submodule error",
             ReleaseError::TaggingError => "error tagging release",
+            ReleaseError::SyncError => "error synchronizing",
             ReleaseError::UnknownError => "unknown error",
         })
     }
 }
+
+pub type ReleaseResult<T> = Result<T, ReleaseError>;
 
 #[derive(Clone, Copy, Debug)]
 pub enum ChartsError {
