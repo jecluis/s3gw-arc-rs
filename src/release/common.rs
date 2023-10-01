@@ -14,13 +14,27 @@
 
 use std::collections::BTreeMap;
 
-use crate::{version::Version, ws::workspace::Workspace};
+use crate::{
+    version::Version,
+    ws::{repository::Repository, workspace::Workspace},
+};
 
+/// Obtains versions corresponding to release 'relver' from the 's3gw' repository.
+///
 pub fn get_release_versions(ws: &Workspace, relver: &Version) -> BTreeMap<u64, Version> {
+    get_release_versions_from_repo(&ws.repos.s3gw, &relver)
+}
+
+/// Obtain versions corresponding to release 'relver' from the provided repository.
+///
+pub fn get_release_versions_from_repo(
+    repo: &Repository,
+    relver: &Version,
+) -> BTreeMap<u64, Version> {
     let min_id = relver.min().get_version_id();
     let max_id = relver.max().get_version_id();
 
-    let version_tree = ws.repos.s3gw.get_versions().unwrap();
+    let version_tree = &repo.get_versions().unwrap();
     let avail = version_tree.range((
         std::ops::Bound::Included(min_id),
         std::ops::Bound::Included(max_id),

@@ -14,7 +14,7 @@
 
 use std::path::PathBuf;
 
-use crate::release::common::get_release_versions;
+use crate::release::common::{get_release_versions, get_release_versions_from_repo};
 use crate::release::errors::ReleaseResult;
 use crate::version::Version;
 use crate::ws::workspace::Workspace;
@@ -53,20 +53,37 @@ pub fn start(release: &mut Release, version: &Version, notes: &PathBuf) -> Relea
     };
 
     let avail = get_release_versions(&ws, &version);
-    let mut avail_it = avail.iter();
 
-    if avail_it.any(|(_, ver)| ver == version) {
+    if avail.iter().any(|(_, ver)| ver == version) {
         warnln!("Version {} has already been released.", version);
         return Err(ReleaseError::ReleaseExistsError);
     }
 
-    // NOTE(joao): we should check whether there is a started release across
-    // the repositories. This can be done by checking for rc versions on
-    // every repository. For now we will ignore this bit.
-
     if avail.len() > 0 {
         warnln!("Release version {} has already been started.", version);
         return Err(ReleaseError::ReleaseStartedError);
+    }
+
+    // Check whether the release has been started across the various
+    // repositories. If it has been started in any one repository, yet not
+    // started in the 's3gw' repository (otherwise it would have been caught
+    // above), then we have a potentially corrupted release state.
+
+    let mut started_repos: Vec<String> = vec![];
+    for repo in ws.repos.as_vec() {
+        let versions = get_release_versions_from_repo(&repo, &version);
+        if versions.len() > 0 {
+            started_repos.push(repo.name.clone());
+        }
+    }
+    if started_repos.len() > 0 {
+        warnln!(
+            "Release version {} has been started in some repositories: {}",
+            version,
+            started_repos.join(", ")
+        );
+        errorln!("Release potentially corrupted!");
+        return Err(ReleaseError::CorruptedError);
     }
 
     infoln!("Start releasing version {}", version);
