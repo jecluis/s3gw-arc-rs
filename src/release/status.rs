@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, fmt::Display};
 
 use colored::Colorize;
 
@@ -26,7 +26,7 @@ struct GitHubRunResult {
 }
 
 #[derive(serde::Deserialize)]
-pub struct GitHubWorkflowResult {
+pub(crate) struct GitHubWorkflowResult {
     name: Option<String>,
 
     #[allow(dead_code)]
@@ -48,6 +48,110 @@ pub struct GitHubWorkflowResult {
     run_attempt: u64,
     #[allow(dead_code)]
     url: String,
+}
+
+pub enum ReleaseWorkflowStatus {
+    UNKNOWN,
+    QUEUED,
+    INPROGRESS,
+    COMPLETED,
+}
+
+impl Display for ReleaseWorkflowStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.to_string())
+    }
+}
+
+impl ReleaseWorkflowStatus {
+    fn to_string(self: &Self) -> String {
+        String::from(match &self {
+            ReleaseWorkflowStatus::COMPLETED => "completed",
+            ReleaseWorkflowStatus::INPROGRESS => "in-progress",
+            ReleaseWorkflowStatus::QUEUED => "queued",
+            ReleaseWorkflowStatus::UNKNOWN => "unknown",
+        })
+    }
+}
+
+pub struct ReleaseWorkflowResult {
+    pub status: ReleaseWorkflowStatus,
+    pub success: bool,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+    pub started_at: chrono::DateTime<chrono::Utc>,
+}
+
+impl ReleaseWorkflowResult {
+    pub fn duration(self: &Self) -> chrono::Duration {
+        match &self.status {
+            ReleaseWorkflowStatus::UNKNOWN => chrono::Duration::zero(),
+            ReleaseWorkflowStatus::INPROGRESS => chrono::Utc::now() - self.started_at,
+            ReleaseWorkflowStatus::COMPLETED => self.updated_at - self.created_at,
+            ReleaseWorkflowStatus::QUEUED => chrono::Utc::now() - self.created_at,
+        }
+    }
+
+    pub fn to_duration_str(self: &Self) -> String {
+        let time_delta = self.duration();
+        let num_days = time_delta.num_days();
+        let num_hours = time_delta.num_hours() - (24 * time_delta.num_days());
+        let num_minutes = time_delta.num_minutes() - (60 * time_delta.num_hours());
+        let num_seconds = time_delta.num_seconds() - (60 * time_delta.num_minutes());
+
+        let mut duration_str = String::new();
+        if num_days > 0 {
+            duration_str.push_str(format!("{}d", num_days).as_str());
+        }
+        if num_hours > 0 {
+            if duration_str.len() > 0 {
+                duration_str.push(' ');
+            }
+            duration_str.push_str(format!("{}h", num_hours).as_str());
+        }
+        if num_minutes > 0 {
+            if duration_str.len() > 0 {
+                duration_str.push(' ');
+            }
+            duration_str.push_str(format!("{}m", num_minutes).as_str());
+        }
+        if num_seconds > 0 {
+            if duration_str.len() > 0 {
+                duration_str.push(' ');
+            }
+            duration_str.push_str(format!("{}s", num_seconds).as_str());
+        }
+
+        duration_str
+    }
+
+    pub(crate) fn from_github_result(res: &GitHubWorkflowResult) -> ReleaseWorkflowResult {
+        let status = match &res.status {
+            None => ReleaseWorkflowStatus::UNKNOWN,
+            Some(v) => match v.as_str() {
+                "queued" => ReleaseWorkflowStatus::QUEUED,
+                "completed" => ReleaseWorkflowStatus::COMPLETED,
+                "in_progress" => ReleaseWorkflowStatus::INPROGRESS,
+                _ => ReleaseWorkflowStatus::UNKNOWN,
+            },
+        };
+
+        let success = match &res.conclusion {
+            None => false,
+            Some(v) => match v.as_str() {
+                "success" => true,
+                _ => false,
+            },
+        };
+
+        ReleaseWorkflowResult {
+            status,
+            success,
+            created_at: res.created_at,
+            updated_at: res.updated_at,
+            started_at: res.run_started_at,
+        }
+    }
 }
 
 pub async fn status(ws: &Workspace, releases: &BTreeMap<u64, Version>) {
@@ -90,7 +194,8 @@ async fn github_status(ws: &Workspace, releases: &BTreeMap<u64, Version>) {
                 Some(v) => format!("-rc{}", v),
             }
         );
-        let runs = match github_get_workflows_status(
+
+        let latest_run = match github_get_latest_release_workflow(
             &github_config.org,
             &github_config.repo,
             &github_token,
@@ -100,18 +205,18 @@ async fn github_status(ws: &Workspace, releases: &BTreeMap<u64, Version>) {
         {
             Ok(v) => v,
             Err(()) => {
-                log::error!("Unable to obtain workflows for tag '{}'", tag);
+                log::error!("Unable to obtain latest workflow for tag '{}'", tag);
                 return;
             }
         };
 
-        for run in &runs {
-            show_run_status(&tag, &run);
+        if latest_run.is_some() {
+            show_run_status(&tag, &latest_run.unwrap());
         }
     }
 }
 
-pub async fn github_get_workflows_status(
+async fn github_get_workflows_status(
     org: &String,
     repo: &String,
     token: &String,
@@ -146,77 +251,74 @@ pub async fn github_get_workflows_status(
     return Ok(runs);
 }
 
-fn show_run_status(tag: &String, run: &GitHubWorkflowResult) {
-    if run.name.is_none() {
-        return;
-    }
-    let name = run.name.as_ref().unwrap();
-    if name.to_lowercase() != "release s3gw" {
-        return;
+pub async fn github_get_latest_release_workflow(
+    org: &String,
+    repo: &String,
+    token: &String,
+    tag: &String,
+) -> Result<Option<ReleaseWorkflowResult>, ()> {
+    let mut results = match github_get_workflows_status(&org, &repo, &token, &tag).await {
+        Ok(r) => r,
+        Err(()) => {
+            boomln!("Error obtaining workflow status from github!");
+            return Err(());
+        }
+    };
+
+    if results.is_empty() {
+        return Ok(None);
     }
 
+    results.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+
+    let filtered: Vec<&GitHubWorkflowResult> = results
+        .iter()
+        .filter(|e| {
+            if e.name.is_none() {
+                return false;
+            }
+            let name = e.name.as_ref().unwrap();
+            if name.to_lowercase() != "release s3gw" {
+                return false;
+            }
+
+            if e.conclusion.is_none() {
+                return true;
+            } else {
+                let c = e.conclusion.as_ref().unwrap();
+                return c != "cancelled";
+            }
+        })
+        .collect();
+
+    match filtered.first() {
+        None => Ok(None),
+        Some(v) => Ok(Some(ReleaseWorkflowResult::from_github_result(&v))),
+    }
+}
+
+fn show_run_status(tag: &String, run: &ReleaseWorkflowResult) {
+    let status_str = &run.status.to_string();
     let status = match &run.status {
-        Some(v) => v.clone(),
-        None => "unknown".into(),
+        ReleaseWorkflowStatus::COMPLETED => status_str.green(),
+        ReleaseWorkflowStatus::INPROGRESS => status_str.yellow(),
+        ReleaseWorkflowStatus::QUEUED => status_str.bold(),
+        ReleaseWorkflowStatus::UNKNOWN => status_str.red(),
     };
-    let conclusion = match &run.conclusion {
-        Some(v) => v.clone(),
-        None => "-".into(),
+    let success = match &run.success {
+        true => "success".green(),
+        false => match &run.status {
+            ReleaseWorkflowStatus::QUEUED | ReleaseWorkflowStatus::INPROGRESS => "waiting".yellow(),
+            ReleaseWorkflowStatus::COMPLETED => "failure".red(),
+            ReleaseWorkflowStatus::UNKNOWN => "unknown".red(),
+        },
     };
-
-    fn get_status_str(value: &String) -> String {
-        match value.as_str() {
-            "completed" => "completed".green(),
-            "cancelled" => "cancelled".red(),
-            "failure" => "failed".red(),
-            "success" => "success".green(),
-            "in_progress" => "in-progress".yellow(),
-            _ => value.bold(),
-        }
-        .to_string()
-    }
-
-    let status_str = get_status_str(&status);
-    let conclusion_str = get_status_str(&conclusion);
-
-    let time_delta = if status == "in_progress" {
-        chrono::Utc::now() - run.run_started_at
-    } else if status == "queued" {
-        chrono::Utc::now() - run.created_at
-    } else {
-        run.updated_at - run.run_started_at
-    };
-
-    let num_days = time_delta.num_days();
-    let num_hours = time_delta.num_hours() - (24 * time_delta.num_days());
-    let num_minutes = time_delta.num_minutes() - (60 * time_delta.num_hours());
-    let num_seconds = time_delta.num_seconds() - (60 * time_delta.num_minutes());
-
-    let mut duration_str = String::new();
-    if num_days > 0 {
-        duration_str.push_str(format!("{}d", num_days).as_str());
-    }
-    if num_hours > 0 {
-        if duration_str.len() > 0 {
-            duration_str.push(' ');
-        }
-        duration_str.push_str(format!("{}h", num_hours).as_str());
-    }
-    if num_minutes > 0 {
-        if duration_str.len() > 0 {
-            duration_str.push(' ');
-        }
-        duration_str.push_str(format!("{}m", num_minutes).as_str());
-    }
-    if num_seconds > 0 {
-        if duration_str.len() > 0 {
-            duration_str.push(' ');
-        }
-        duration_str.push_str(format!("{}s", num_seconds).as_str());
-    }
 
     println!(
         "{:20}   status: {}, conclusion: {}  ({})",
-        tag, status_str, conclusion_str, duration_str
+        tag,
+        status,
+        success,
+        run.to_duration_str()
     );
 }
