@@ -195,8 +195,8 @@ fn maybe_cut_branches<'a>(
     for repo in &repos {
         let branches = match repo.get_release_branches() {
             Ok(v) => v,
-            Err(()) => {
-                log::error!("unable to obtain branches for release");
+            Err(err) => {
+                log::error!("unable to obtain branches for release: {}", err);
                 return Err(ReleaseError::UnknownError);
             }
         };
@@ -251,8 +251,8 @@ fn cut_branches_for(version: &Version, repos: &Vec<&Repository>) -> ReleaseResul
             Ok(()) => {
                 log::info!("branched off!");
             }
-            Err(()) => {
-                log::error!("error branching off!");
+            Err(err) => {
+                log::error!("error branching off: {}", err);
                 return Err(ReleaseError::UnknownError);
             }
         }
@@ -356,8 +356,13 @@ pub fn perform_release(
                 );
                 (tag_name, tag_oid)
             }
-            Err(()) => {
-                errorln!("Error tagging version '{}' with '{}'", relver, next_ver);
+            Err(err) => {
+                errorln!(
+                    "Error tagging version '{}' with '{}': {}",
+                    relver,
+                    next_ver,
+                    err
+                );
                 return Err(ReleaseError::TaggingError);
             }
         };
@@ -374,8 +379,13 @@ pub fn perform_release(
             Ok(()) => {
                 log::debug!("Pushed '{}' to repository '{}'", relver, entry.name);
             }
-            Err(()) => {
-                errorln!("Error pushing '{}' to repository '{}'!", relver, entry.name);
+            Err(err) => {
+                errorln!(
+                    "Error pushing '{}' to repository '{}': {}",
+                    relver,
+                    entry.name,
+                    err
+                );
                 return Err(ReleaseError::PushingError);
             }
         };
@@ -388,11 +398,12 @@ pub fn perform_release(
             Ok(()) => {
                 log::debug!("Pushed '{}' to repository '{}'!", next_ver, entry.name);
             }
-            Err(()) => {
+            Err(err) => {
                 errorln!(
-                    "Error pushing '{}' to repository '{}'!",
+                    "Error pushing '{}' to repository '{}': {}",
                     next_ver,
-                    entry.name
+                    entry.name,
+                    err
                 );
                 return Err(ReleaseError::PushingError);
             }
@@ -421,8 +432,8 @@ pub fn perform_release(
                 log::debug!("Updated submodule '{}'", entry.name);
                 p
             }
-            Err(()) => {
-                errorln!("Error updating submodule '{}'", entry.name);
+            Err(err) => {
+                errorln!("Error updating submodule '{}': {}", entry.name, err);
                 return Err(ReleaseError::SubmoduleError);
             }
         };
@@ -477,8 +488,8 @@ pub fn perform_release(
                     .join("\n")
             );
         }
-        Err(()) => {
-            log::error!("Error staging paths!");
+        Err(err) => {
+            log::error!("Error staging paths: {}", err);
             return Err(ReleaseError::StagingError);
         }
     };
@@ -487,8 +498,13 @@ pub fn perform_release(
         Ok(()) => {
             log::debug!("Committed release '{}' tag '{}'", relver, next_ver);
         }
-        Err(()) => {
-            errorln!("Unable to commit release '{}' tag '{}'", relver, next_ver);
+        Err(err) => {
+            errorln!(
+                "Unable to commit release '{}' tag '{}': {}",
+                relver,
+                next_ver,
+                err
+            );
             return Err(ReleaseError::CommittingError);
         }
     };
@@ -498,8 +514,12 @@ pub fn perform_release(
         Ok(()) => {
             log::debug!("Pushed s3gw release branch for '{}'", relver);
         }
-        Err(()) => {
-            errorln!("Error pushing s3gw release branch for '{}'", relver);
+        Err(err) => {
+            errorln!(
+                "Error pushing s3gw release branch for '{}': {}",
+                relver,
+                err
+            );
             return Err(ReleaseError::PushingError);
         }
     };
@@ -512,11 +532,12 @@ pub fn perform_release(
                 relver
             );
         }
-        Err(()) => {
+        Err(err) => {
             errorln!(
-                "Error pushing s3gw release tag '{}' for version '{}'",
+                "Error pushing s3gw release tag '{}' for version '{}': {}",
                 next_ver,
-                relver
+                relver,
+                err
             );
             return Err(ReleaseError::PushingError);
         }

@@ -38,8 +38,8 @@ pub fn update_charts(repo: &Repository, version: &Version) -> ChartsResult<()> {
         return Err(err);
     }
 
-    if let Err(()) = repo.stage_paths(&vec![chart_path_rel]) {
-        boomln!("Unable to stage chart changes!");
+    if let Err(err) = repo.stage_paths(&vec![chart_path_rel]) {
+        boomln!("Unable to stage chart changes: {}", err);
         return Err(ChartsError::StagingError);
     }
 

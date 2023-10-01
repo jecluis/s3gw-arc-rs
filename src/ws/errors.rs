@@ -14,11 +14,23 @@
 
 use std::fmt::Display;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum RepositoryError {
     UnableToOpenRepositoryError,
     UnableToGetReferencesError,
-    #[allow(dead_code)]
+    UnknownBranchError,
+    UnknownSHA1Error,
+    SubmoduleHeadUpdateError,
+    StagingError,
+
+    // git related errors
+    FetchingError,
+    PushingError,
+    CheckoutError,
+    RemoteUpdateError,
+    SubmoduleUpdateError,
+    BranchingError,
+
     UnknownError,
 }
 
@@ -27,7 +39,23 @@ impl Display for RepositoryError {
         f.write_str(match self {
             RepositoryError::UnableToOpenRepositoryError => "unable to open repository",
             RepositoryError::UnableToGetReferencesError => "unable to obtain git references",
+            RepositoryError::UnknownBranchError => "unknown branch",
+            RepositoryError::UnknownSHA1Error => "unknown SHA1",
+            RepositoryError::SubmoduleHeadUpdateError => "error updating submodule HEAD",
+            RepositoryError::StagingError => "error staging paths",
+
+            // git related errors
+            RepositoryError::FetchingError => "error fetching from remote",
+            RepositoryError::PushingError => "error pushing to remote",
+            RepositoryError::CheckoutError => "error checking out branch",
+            RepositoryError::RemoteUpdateError => "error updating remote",
+            RepositoryError::SubmoduleUpdateError => "error updating submodules",
+            RepositoryError::BranchingError => "error branching",
+
+            // unknown error
             RepositoryError::UnknownError => "unknown error",
         })
     }
 }
+
+pub type RepositoryResult<T> = Result<T, RepositoryError>;

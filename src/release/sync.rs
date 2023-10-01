@@ -43,11 +43,12 @@ pub fn sync(release: &Release, relver: &Version) -> Result<(), ()> {
                     base_ver
                 );
             }
-            Err(()) => {
+            Err(err) => {
                 errorln!(
-                    "Unable to checkout branch for version '{}' on repository '{}'",
+                    "Unable to checkout branch for version '{}' on repository '{}': {}",
                     base_ver,
-                    repo.name
+                    repo.name,
+                    err
                 );
                 return Err(());
             }
@@ -59,8 +60,8 @@ pub fn sync(release: &Release, relver: &Version) -> Result<(), ()> {
             Ok(()) => {
                 log::debug!("sync for release, repo '{}' sync'ed", repo.name);
             }
-            Err(()) => {
-                errorln!("Unable to synchronize repository '{}'", repo.name);
+            Err(err) => {
+                errorln!("Unable to synchronize repository '{}': {}", repo.name, err);
                 return Err(());
             }
         };

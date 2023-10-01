@@ -18,6 +18,7 @@ use crate::git;
 use crate::{boomln, version::Version};
 use crate::{errorln, successln};
 
+use super::errors::RepositoryResult;
 use super::{
     config::{WSGitRepoConfigValues, WSGitReposConfig, WSUserConfig},
     errors::RepositoryError,
@@ -151,7 +152,7 @@ impl Repository {
     /// Synchronize local repository with its upstream. If the repository does
     /// not exist yet, it will be cloned.
     ///
-    pub fn sync(self: &Self, sync_submodules: bool) -> Result<(), ()> {
+    pub fn sync(self: &Self, sync_submodules: bool) -> RepositoryResult<()> {
         if !self.path.exists() {
             // clone repository
             let git = match git::repo::GitRepo::clone(
@@ -161,7 +162,7 @@ impl Repository {
                 &self.name,
             ) {
                 Ok(v) => v,
-                Err(_) => return Err(()),
+                Err(()) => return Err(RepositoryError::UnknownError),
             };
             // init submodules
 
@@ -173,16 +174,16 @@ impl Repository {
         // git remote update
         let git = match git::repo::GitRepo::open(&self.path) {
             Ok(v) => v,
-            Err(_) => return Err(()),
+            Err(()) => return Err(RepositoryError::UnableToOpenRepositoryError),
         };
         log::debug!("Updating remote for repo at {}", self.path.display());
         match git.remote_update(&self.name) {
-            Ok(_) => {
+            Ok(()) => {
                 log::debug!("Updated remote");
             }
-            Err(_) => {
+            Err(()) => {
                 log::debug!("Error updating remote");
-                return Err(());
+                return Err(RepositoryError::RemoteUpdateError);
             }
         };
 
@@ -193,7 +194,7 @@ impl Repository {
                 }
                 Err(()) => {
                     log::error!("Error updating submodules for repo!");
-                    return Err(());
+                    return Err(RepositoryError::SubmoduleUpdateError);
                 }
             };
         }
@@ -209,7 +210,7 @@ impl Repository {
     ///
     pub fn get_releases(
         self: &Self,
-    ) -> Result<BTreeMap<u64, crate::version::BaseVersion>, RepositoryError> {
+    ) -> RepositoryResult<BTreeMap<u64, crate::version::BaseVersion>> {
         let branch_re = regex::Regex::new(&self.config.branch_pattern).expect(
             format!(
                 "potentially malformed branch pattern '{}'",
@@ -358,16 +359,19 @@ impl Repository {
         }
     }
 
+    /// Obtain all versions from the provided vector of references, putting
+    /// each reference through a regular expression for parsing to obtain the version.
+    ///
     fn get_versions_from_refs(
         self: &Self,
         refs: &Vec<&crate::git::refs::GitRef>,
         regex_pattern: &String,
-    ) -> Result<BTreeMap<u64, Version>, ()> {
+    ) -> RepositoryResult<BTreeMap<u64, Version>> {
         let regex = match regex::Regex::new(&regex_pattern) {
             Ok(r) => r,
             Err(e) => {
                 log::error!("potentially malformed pattern '{}': {}", regex_pattern, e);
-                return Err(());
+                return Err(RepositoryError::UnknownError);
             }
         };
 
@@ -408,25 +412,32 @@ impl Repository {
         Ok(versions)
     }
 
-    pub fn get_git_refs(self: &Self) -> Result<crate::git::refs::GitRefMap, ()> {
+    pub fn get_git_refs(self: &Self) -> RepositoryResult<crate::git::refs::GitRefMap> {
         let git = match git::repo::GitRepo::open(&self.path) {
             Ok(v) => v,
             Err(()) => {
                 log::error!("unable to open git repository at '{}'", self.path.display());
-                return Err(());
+                return Err(RepositoryError::UnableToOpenRepositoryError);
             }
         };
-        git.get_refs()
+        match git.get_refs() {
+            Ok(m) => Ok(m),
+            Err(()) => Err(RepositoryError::UnableToGetReferencesError),
+        }
     }
 
     /// Obtain vector containing all the GitRefEntry that are branches, local or remote.
     ///
-    pub fn get_heads_refs(self: &Self) -> Result<Vec<crate::git::refs::GitRef>, ()> {
+    pub fn get_heads_refs(self: &Self) -> RepositoryResult<Vec<crate::git::refs::GitRef>> {
         let refs = match self.get_git_refs() {
             Ok(r) => r,
-            Err(()) => {
-                boomln!("Unable to obtain git refs for repository '{}'", self.name);
-                return Err(());
+            Err(err) => {
+                boomln!(
+                    "Unable to obtain git refs for repository '{}': {}",
+                    self.name,
+                    err
+                );
+                return Err(err);
             }
         };
         let mut heads = vec![];
@@ -436,15 +447,18 @@ impl Repository {
         Ok(heads)
     }
 
-    pub fn get_versions(self: &Self) -> Result<BTreeMap<u64, Version>, ()> {
+    /// Obtain all versions, from tags, known to this repository.
+    ///
+    pub fn get_versions(self: &Self) -> RepositoryResult<BTreeMap<u64, Version>> {
         let refs = match self.get_git_refs() {
             Ok(v) => v,
-            Err(()) => {
+            Err(err) => {
                 log::error!(
-                    "unable to obtain refs for repository at '{}'",
-                    self.path.display()
+                    "unable to obtain refs for repository at '{}': {}",
+                    self.path.display(),
+                    err
                 );
-                return Err(());
+                return Err(err);
             }
         };
 
@@ -452,25 +466,29 @@ impl Repository {
 
         match self.get_versions_from_refs(&tag_refs, &self.config.tag_pattern) {
             Ok(v) => Ok(v),
-            Err(()) => {
+            Err(err) => {
                 log::error!(
-                    "unable to obtain versions from refs from repository at '{}'",
-                    self.path.display()
+                    "unable to obtain versions from refs from repository at '{}': {}",
+                    self.path.display(),
+                    err
                 );
-                return Err(());
+                return Err(err);
             }
         }
     }
 
-    pub fn get_release_branches(self: &Self) -> Result<BTreeMap<u64, Version>, ()> {
+    /// Obtain all release branches known to this repository, both local and remote.
+    ///
+    pub fn get_release_branches(self: &Self) -> RepositoryResult<BTreeMap<u64, Version>> {
         let refs = match self.get_git_refs() {
             Ok(v) => v,
-            Err(()) => {
+            Err(err) => {
                 log::error!(
-                    "unable to obtain refs for repository '{}'",
-                    self.path.display()
+                    "unable to obtain refs for repository '{}': {}",
+                    self.path.display(),
+                    err
                 );
-                return Err(());
+                return Err(err);
             }
         };
 
@@ -479,64 +497,25 @@ impl Repository {
 
         match self.get_versions_from_refs(&branch_refs, &self.config.branch_pattern) {
             Ok(v) => Ok(v),
-            Err(()) => {
+            Err(err) => {
                 log::error!(
-                    "unable to obtain branches from refs from repository at '{}'",
-                    self.path.display()
+                    "unable to obtain branches from refs from repository at '{}': {}",
+                    self.path.display(),
+                    err
                 );
-                return Err(());
+                return Err(err);
             }
         }
     }
 
-    pub fn _find_version(self: &Self, version: &Version) -> Result<(), ()> {
-        let ver_id = version.get_version_id();
-        let base_ver = version.get_base_version();
-        let base_ver_id = base_ver.get_version_id();
-
-        log::trace!(
-            "find version {} (id {}), base {} (id {})",
-            version,
-            ver_id,
-            base_ver,
-            base_ver_id
-        );
-
-        let versions = match self.get_versions() {
-            Ok(v) => v,
-            Err(()) => {
-                log::error!("unable to obtain versions!");
-                return Err(());
-            }
-        };
-
-        match versions.get(&ver_id) {
-            Some(_) => Ok(()),
-            None => Err(()),
-        }
-    }
-
-    pub fn _test_ssh(self: &Self) {
-        let git = match git::repo::GitRepo::open(&self.path) {
-            Ok(v) => v,
-            Err(()) => {
-                log::error!(
-                    "Unable to open git repository at '{}' to test ssh!",
-                    self.path.display()
-                );
-                return;
-            }
-        };
-
-        git._test_ssh();
-    }
-
-    pub fn branch_from_default(self: &Self, dst: &Version) -> Result<(), ()> {
+    /// Create a new branch 'dst' from this repository's default branch.
+    ///
+    pub fn branch_from_default(self: &Self, dst: &Version) -> RepositoryResult<()> {
         let git = match git::repo::GitRepo::open(&self.path) {
             Ok(v) => v,
             Err(()) => {
                 log::error!("Unable to open git repository at '{}'", self.path.display());
-                return Err(());
+                return Err(RepositoryError::UnableToOpenRepositoryError);
             }
         };
 
@@ -547,7 +526,7 @@ impl Repository {
             }
             Err(()) => {
                 log::error!("Error branching from default to '{}'!", dst_branch);
-                return Err(());
+                return Err(RepositoryError::BranchingError);
             }
         }
 
@@ -561,7 +540,7 @@ impl Repository {
                     dst_branch,
                     self.name
                 );
-                return Err(());
+                return Err(RepositoryError::CheckoutError);
             }
         };
 
@@ -571,18 +550,18 @@ impl Repository {
     /// Checks out the branch for the specified base version. Will fetch the
     /// branch if not already local. Will ensure branch is updated from remote
     /// branch.
-    pub fn checkout_branch(self: &Self, base_ver: &Version) -> Result<(), ()> {
+    pub fn checkout_branch(self: &Self, base_ver: &Version) -> RepositoryResult<()> {
         let heads = match self.get_heads_refs() {
             Ok(v) => v,
-            Err(()) => {
-                return Err(());
+            Err(err) => {
+                return Err(err);
             }
         };
         let branch_str = self.version_to_str(&base_ver, false);
         let ref_entry = match heads.iter().find(|e| e.name == branch_str) {
             None => {
                 errorln!("Unable to find branch '{}' local or remote", branch_str);
-                return Err(());
+                return Err(RepositoryError::UnknownBranchError);
             }
             Some(e) => e,
         };
@@ -591,7 +570,7 @@ impl Repository {
             Ok(v) => v,
             Err(()) => {
                 boomln!("Unable to open git repository at '{}'", self.path.display());
-                return Err(());
+                return Err(RepositoryError::UnableToOpenRepositoryError);
             }
         };
 
@@ -603,7 +582,7 @@ impl Repository {
                 }
                 Err(()) => {
                     errorln!("Error fetching '{}'", branch_str);
-                    return Err(());
+                    return Err(RepositoryError::FetchingError);
                 }
             };
         }
@@ -618,18 +597,22 @@ impl Repository {
                     branch_str,
                     self.name
                 );
-                return Err(());
+                return Err(RepositoryError::CheckoutError);
             }
         };
 
         Ok(())
     }
 
+    /// Create a new release version tag for a given release version. The branch
+    /// to be tagged will be decided from the 'relver' provided, while the tag
+    /// to tag it with will be derived from 'tagver'.
+    ///
     pub fn tag_release_branch(
         self: &Self,
         relver: &Version,
         tagver: &Version,
-    ) -> Result<(String, String), ()> {
+    ) -> RepositoryResult<(String, String)> {
         let branch_name = relver.to_str_fmt(&self.config.branch_format);
         let base_tag_name = tagver.to_str_fmt(&self.config.tag_format);
         let tag_name = if let Some(rc) = tagver.rc {
@@ -678,21 +661,21 @@ impl Repository {
                         tag_name,
                         res.code().unwrap()
                     );
-                    return Err(());
+                    return Err(RepositoryError::UnknownError);
                 }
             }
             Err(err) => {
                 log::error!("Unable to run 'git' command: {}", err);
-                return Err(());
+                return Err(RepositoryError::UnknownError);
             }
         };
 
         let (tag_oid, commit_oid) =
             match self.get_sha1_by_refspec(&format!("refs/tags/{}", tag_name)) {
                 Ok(s) => s,
-                Err(()) => {
+                Err(err) => {
                     log::error!("Unable to obtain sha1 for tag '{}'", tag_name);
-                    return Err(());
+                    return Err(err);
                 }
             };
 
@@ -707,12 +690,14 @@ impl Repository {
         Ok((tag_name, tag_oid))
     }
 
-    fn get_sha1_by_refspec(self: &Self, refspec: &String) -> Result<(String, String), ()> {
+    /// Obtain a given refspec's SHA1.
+    ///
+    fn get_sha1_by_refspec(self: &Self, refspec: &String) -> RepositoryResult<(String, String)> {
         let git = match git::repo::GitRepo::open(&self.path) {
             Ok(r) => r,
             Err(()) => {
                 log::error!("Unable to open git repository at '{}'", self.path.display());
-                return Err(());
+                return Err(RepositoryError::UnableToOpenRepositoryError);
             }
         };
         let res = match git.get_oid_by_refspec(refspec) {
@@ -721,23 +706,25 @@ impl Repository {
                 let commit = match obj.peel_to_commit() {
                     Err(err) => {
                         log::error!("Enable to find commit for refspec '{}': {}", refspec, err);
-                        return Err(());
+                        return Err(RepositoryError::UnknownSHA1Error);
                     }
                     Ok(c) => c.id().to_string(),
                 };
                 Ok((oid, commit))
             }
-            Err(()) => Err(()),
+            Err(()) => Err(RepositoryError::UnknownError),
         };
         res
     }
 
-    pub fn push(self: &Self, refspec: &String) -> Result<(), ()> {
+    /// Push the given refspec to this repository's read-write remote.
+    ///
+    pub fn push(self: &Self, refspec: &String) -> RepositoryResult<()> {
         let git = match git::repo::GitRepo::open(&self.path) {
             Ok(r) => r,
             Err(()) => {
                 log::error!("Unable to open git repository at '{}'", self.path.display());
-                return Err(());
+                return Err(RepositoryError::UnableToOpenRepositoryError);
             }
         };
         match git.push(&refspec) {
@@ -747,34 +734,44 @@ impl Repository {
             }
             Err(()) => {
                 log::error!("Error pushing '{}'!", refspec);
-                Err(())
+                Err(RepositoryError::PushingError)
             }
         }
     }
 
-    pub fn push_release_branch(self: &Self, relver: &Version) -> Result<(), ()> {
+    /// Push the provided 'relver' release version branch to this repository's
+    /// read-write remote.
+    ///
+    pub fn push_release_branch(self: &Self, relver: &Version) -> RepositoryResult<()> {
         let relver_str = self.version_to_str(&relver, false);
         let refspec = format!("refs/heads/{}", relver_str);
         self.push(&refspec)
     }
 
-    pub fn push_release_tag(self: &Self, tagver: &Version) -> Result<(), ()> {
+    /// Push the provided 'tagver' release version tag to this repository's
+    /// read-write remote.
+    ///
+    pub fn push_release_tag(self: &Self, tagver: &Version) -> RepositoryResult<()> {
         let tagver_str = self.version_to_str(&tagver, true);
         let refspec = format!("refs/tags/{}", tagver_str);
         self.push(&refspec)
     }
 
+    /// Set a given submodule 'name' head to the provided 'name_spec'. The
+    /// function requires the 'is_tag' argument to be provided to build the
+    /// correct refspec from 'name_spec'.
+    ///
     pub fn set_submodule_head(
         self: &Self,
         name: &String,
         name_spec: &String,
         is_tag: bool,
-    ) -> Result<PathBuf, ()> {
+    ) -> RepositoryResult<PathBuf> {
         let git = match git::repo::GitRepo::open(&self.path) {
             Ok(r) => r,
             Err(()) => {
                 log::error!("Unable to open git repository at '{}'", self.path.display());
-                return Err(());
+                return Err(RepositoryError::UnableToOpenRepositoryError);
             }
         };
         log::trace!(
@@ -795,19 +792,21 @@ impl Repository {
             }
             Err(()) => {
                 log::error!("Error setting submodule '{}' head to '{}'", name, refname);
-                return Err(());
+                return Err(RepositoryError::SubmoduleHeadUpdateError);
             }
         };
 
         Ok(path)
     }
 
-    pub fn stage_paths(self: &Self, paths: &Vec<PathBuf>) -> Result<(), ()> {
+    /// Add paths in provided vector to this repository's index, for subsequent commit.
+    ///
+    pub fn stage_paths(self: &Self, paths: &Vec<PathBuf>) -> RepositoryResult<()> {
         let git = match git::repo::GitRepo::open(&self.path) {
             Ok(r) => r,
             Err(()) => {
                 log::error!("Unable to open git repository at '{}'", self.path.display());
-                return Err(());
+                return Err(RepositoryError::UnableToOpenRepositoryError);
             }
         };
         log::debug!(
@@ -824,13 +823,15 @@ impl Repository {
             }
             Err(()) => {
                 log::error!("Unable to stage paths!");
-                return Err(());
+                return Err(RepositoryError::StagingError);
             }
         };
         Ok(())
     }
 
-    pub fn commit_release(self: &Self, relver: &Version, tagver: &Version) -> Result<(), ()> {
+    /// Commit a given release version, tagging it with the appropriate version.
+    ///
+    pub fn commit_release(self: &Self, relver: &Version, tagver: &Version) -> RepositoryResult<()> {
         let relver_str = format!("v{}", relver);
         let commit_msg = if let Some(rc) = &tagver.rc {
             format!("release candidate {} for {}", rc, relver_str)
@@ -854,12 +855,12 @@ impl Repository {
             Ok(res) => {
                 if !res.success() {
                     log::error!("Unable to commit '{}': {}", tagver, res.code().unwrap());
-                    return Err(());
+                    return Err(RepositoryError::UnknownError);
                 }
             }
             Err(err) => {
                 log::error!("Unable to commit '{}': {}", tagver, err);
-                return Err(());
+                return Err(RepositoryError::UnknownError);
             }
         };
 
@@ -869,8 +870,9 @@ impl Repository {
             Ok(_) => {
                 log::debug!("Tagged release with '{}'", tag_name);
             }
-            Err(()) => {
-                log::error!("Error tagging release with '{}'", tag_name);
+            Err(err) => {
+                log::error!("Error tagging release with '{}': {}", tag_name, err);
+                return Err(err);
             }
         };
 
