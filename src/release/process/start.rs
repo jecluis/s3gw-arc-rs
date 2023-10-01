@@ -95,9 +95,9 @@ pub fn start(release: &mut Release, version: &Version, notes: &PathBuf) -> Relea
         Ok(false) => {
             infoln!("Release branches already exist.");
         }
-        Err(()) => {
-            errorln!("Error creating release!");
-            return Err(ReleaseError::UnknownError);
+        Err(err) => {
+            errorln!("Error creating release branches: {}", err);
+            return Err(err);
         }
     };
 
@@ -153,7 +153,7 @@ pub fn start(release: &mut Release, version: &Version, notes: &PathBuf) -> Relea
 
 /// Prepare release branches by creating them if necessary.
 ///
-fn create_release_branches(ws: &Workspace, version: &Version) -> Result<bool, ()> {
+fn create_release_branches(ws: &Workspace, version: &Version) -> ReleaseResult<bool> {
     let mut res = false;
     // check whether we need to cut branches for each repository
     match maybe_cut_branches(&ws, &version) {
@@ -166,15 +166,15 @@ fn create_release_branches(ws: &Workspace, version: &Version) -> Result<bool, ()
                     log::info!("Success cutting branches for v{}", version);
                     res = true;
                 }
-                Err(_) => {
+                Err(err) => {
                     log::error!("Error cutting branches for v{}", version);
-                    return Err(());
+                    return Err(err);
                 }
             };
         }
         Err(err) => {
             log::error!("Unable to cut branches for release {}: {}", version, err);
-            return Err(());
+            return Err(err);
         }
     };
 
@@ -186,7 +186,7 @@ fn create_release_branches(ws: &Workspace, version: &Version) -> Result<bool, ()
 fn maybe_cut_branches<'a>(
     ws: &'a Workspace,
     version: &Version,
-) -> Result<Option<Vec<&'a Repository>>, ReleaseError> {
+) -> ReleaseResult<Option<Vec<&'a Repository>>> {
     let repos = ws.repos.as_vec();
     let base_version = version.get_base_version();
     let base_version_id = base_version.get_version_id();
@@ -244,7 +244,7 @@ fn maybe_cut_branches<'a>(
 /// Cut release branches for the provided repositories, for the provided
 /// release version.
 ///
-fn cut_branches_for(version: &Version, repos: &Vec<&Repository>) -> Result<(), ReleaseError> {
+fn cut_branches_for(version: &Version, repos: &Vec<&Repository>) -> ReleaseResult<()> {
     for repo in repos {
         log::info!("cut branch for repository {}", repo.name);
         match repo.branch_from_default(&version) {
@@ -269,7 +269,7 @@ pub fn start_release_candidate(
     ws: &Workspace,
     relver: &Version,
     notes: Option<&PathBuf>,
-) -> Result<Version, ReleaseError> {
+) -> ReleaseResult<Version> {
     // figure out which rc comes next.
     infoln!("Assess next release version...");
     let avail_versions = get_release_versions(&ws, &relver);
@@ -311,7 +311,7 @@ pub fn perform_release(
     relver: &Version,
     next_ver: &Version,
     notes: &Option<&PathBuf>,
-) -> Result<(), ReleaseError> {
+) -> ReleaseResult<()> {
     // start release candidate on the various repositories, except
     // 's3gw.git'.
     let mut submodules = vec![
