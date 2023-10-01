@@ -68,6 +68,10 @@ pub struct ContinueCommand {
     /// Release version to continue (e.g., v0.17.1)
     #[arg(value_name = "VERSION", short, long)]
     version: Option<String>,
+
+    /// Force continuing a release regardless of previous candidate state
+    #[arg(short, long)]
+    force: bool,
 }
 
 #[derive(clap::Args)]
@@ -196,7 +200,10 @@ pub async fn handle_cmds(cmd: &Cmds) {
                 &mut release,
                 &relver,
                 &continue_cmd.notes,
-            ) {
+                continue_cmd.force,
+            )
+            .await
+            {
                 Ok(()) => {
                     successln!("Release {} successfully continued.", relver);
                 }

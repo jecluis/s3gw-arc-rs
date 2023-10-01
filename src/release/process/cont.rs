@@ -14,21 +14,25 @@
 
 use std::path::PathBuf;
 
+use crate::boomln;
 use crate::release::process::start;
+use crate::release::status;
 use crate::release::sync;
 use crate::release::Release;
 use crate::successln;
 use crate::{errorln, infoln, release::errors::ReleaseError, version::Version};
 
-pub fn continue_release(
+pub async fn continue_release(
     release: &mut Release,
     version: &Version,
     notes: &PathBuf,
+    force: bool,
 ) -> Result<(), ReleaseError> {
     // 1. check whether release has been finished
     // 2. check whether release has been started
     // 3. sync repositories for the specified release
-    // 4. start a new release candidate
+    // 3. check whether last release candidate has finished building
+    // 5. start a new release candidate
 
     let ws = &release.ws;
 
@@ -48,6 +52,47 @@ pub fn continue_release(
         Err(()) => {
             errorln!("Unable to sync release!");
             return Err(ReleaseError::UnknownError);
+        }
+    };
+
+    let last_rc = match release_versions.last_key_value() {
+        None => {
+            boomln!("Unable to find last release candidate!");
+            panic!("This should not happen!");
+        }
+        Some((_, v)) => v,
+    };
+
+    let release_status = match status::get_release_status(&ws, &last_rc).await {
+        Ok(v) => v,
+        Err(()) => {
+            boomln!("Unable to obtain latest release status!");
+            return Err(ReleaseError::UnknownError);
+        }
+    };
+    match release_status {
+        None => {
+            errorln!(
+                "Previous release candidate {} has not been released yet.",
+                last_rc
+            );
+            if force {
+                infoln!("Continuing regardless because '--force' was specified.");
+            } else {
+                infoln!("Specify '--force' if you want to continue nonetheless.");
+                return Err(ReleaseError::UnknownError);
+            }
+        }
+        Some(s) => {
+            if !s.success {
+                errorln!("Previous release candidate {} failed releasing!", last_rc);
+                if force {
+                    infoln!("Continuing regardless because '--force' was specified.");
+                } else {
+                    infoln!("Specify '--force' if you want to continue nonetheless.");
+                    return Err(ReleaseError::UnknownError);
+                }
+            }
         }
     };
 
