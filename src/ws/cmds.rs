@@ -57,8 +57,8 @@ pub fn handle_cmds(cmd: &Cmds) {
     };
     let _ws = match super::init::open(&path) {
         Ok(v) => v,
-        Err(_) => {
-            errorln!("Unable to open workspace at {}", path.display());
+        Err(err) => {
+            errorln!("Unable to open workspace at {}: {}", path.display(), err);
             return;
         }
     };

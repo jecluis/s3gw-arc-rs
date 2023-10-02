@@ -14,39 +14,41 @@
 
 use std::path::PathBuf;
 
-use super::{config::WSConfig, prompt::init_prompt, workspace::Workspace};
+use crate::ws::errors::WorkspaceError;
+
+use super::{config::WSConfig, errors::WorkspaceResult, prompt::init_prompt, workspace::Workspace};
 
 /// Create and initiate a new workspace at 'path'.
-pub fn init(path: &PathBuf) -> Result<Workspace, ()> {
+pub fn init(path: &PathBuf) -> WorkspaceResult<Workspace> {
     let arcpath = path.join(".arc");
     let cfgpath = arcpath.join("config.json");
 
     if cfgpath.exists() {
         log::error!("Workspace at {} already exists.", path.display());
-        return Err(());
+        return Err(WorkspaceError::AlreadyExistsError);
     } else if !path.exists() || !arcpath.exists() || !cfgpath.exists() {
         match create_workspace(path) {
-            Ok(_) => {}
-            Err(_) => {
-                log::error!("Unable to create workspace at {}", path.display());
-                return Err(());
+            Ok(()) => {}
+            Err(err) => {
+                log::error!("Unable to create workspace at {}: {}", path.display(), err);
+                return Err(WorkspaceError::CreationError);
             }
         };
     }
 
     let ws = match Workspace::open(path) {
         Ok(v) => v,
-        Err(_) => {
-            log::error!("Error opening workspace at {}", path.display());
-            return Err(());
+        Err(err) => {
+            log::error!("Error opening workspace at {}: {}", path.display(), err);
+            return Err(err);
         }
     };
 
     match ws.sync() {
         Ok(_) => {}
-        Err(_) => {
+        Err(()) => {
             log::error!("Error synchronizing workspace at {}", path.display());
-            return Err(());
+            return Err(WorkspaceError::SyncError);
         }
     };
 
@@ -54,19 +56,19 @@ pub fn init(path: &PathBuf) -> Result<Workspace, ()> {
 }
 
 /// Open an existing workspace at 'path'.
-pub fn open(path: &PathBuf) -> Result<Workspace, ()> {
+pub fn open(path: &PathBuf) -> WorkspaceResult<Workspace> {
     match Workspace::open(path) {
         Ok(ws) => Ok(ws),
-        Err(_) => {
-            log::error!("Error opening workspace at {}", path.display());
-            return Err(());
+        Err(err) => {
+            log::error!("Error opening workspace at {}: {}", path.display(), err);
+            return Err(err);
         }
     }
 }
 
 /// Creates a new workspace, obtaining information required from the user (via
 /// prompts), and writes a workspace config file.
-fn create_workspace(path: &PathBuf) -> Result<(), ()> {
+fn create_workspace(path: &PathBuf) -> WorkspaceResult<()> {
     let arcpath = path.join(".arc");
     if !arcpath.exists() {
         std::fs::create_dir_all(&arcpath).expect("Unable to create directories");
@@ -78,16 +80,16 @@ fn create_workspace(path: &PathBuf) -> Result<(), ()> {
 
     let cfg = match init_prompt(&WSConfig::default()) {
         Ok(v) => v,
-        Err(_) => {
-            log::error!("Unable to generate workspace config");
-            return Err(());
+        Err(err) => {
+            log::error!("Unable to generate workspace config: {}", err);
+            return Err(WorkspaceError::ConfigError);
         }
     };
     match cfg.write(&cfgpath) {
         Ok(_) => {}
         Err(_) => {
             log::error!("Unable to write workspace config at {}", cfgpath.display());
-            return Err(());
+            return Err(WorkspaceError::ConfigError);
         }
     };
     log::debug!("Wrote workspace config at {}", cfgpath.display());

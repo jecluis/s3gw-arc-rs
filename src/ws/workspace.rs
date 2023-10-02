@@ -14,9 +14,9 @@
 
 use std::path::PathBuf;
 
-use crate::infoln;
+use crate::{infoln, ws::errors::WorkspaceError};
 
-use super::{config::WSConfig, repository::Repos};
+use super::{config::WSConfig, errors::WorkspaceResult, repository::Repos};
 
 #[derive(Clone)]
 pub struct Workspace {
@@ -28,26 +28,30 @@ pub struct Workspace {
 impl Workspace {
     /// Open an existing workspace at 'path'.
     ///
-    pub fn open(path: &PathBuf) -> Result<Workspace, ()> {
+    pub fn open(path: &PathBuf) -> WorkspaceResult<Workspace> {
         let arcpath = path.join(".arc");
         let cfgpath = arcpath.join("config.json");
 
         if !arcpath.exists() || !cfgpath.exists() {
             log::error!("Workspace at {} does not exist!", path.display());
-            return Err(());
+            return Err(WorkspaceError::DoesNotExistError);
         }
 
         let cfg = match WSConfig::read(&cfgpath) {
             Ok(v) => v,
-            Err(_) => {
-                log::error!("Unable to open workspace config at {}", cfgpath.display());
-                return Err(());
+            Err(err) => {
+                log::error!(
+                    "Unable to open workspace config at {}: {}",
+                    cfgpath.display(),
+                    err
+                );
+                return Err(WorkspaceError::ConfigError);
             }
         };
 
         let repos = match Repos::init(&path, &cfg.user, &cfg.git) {
             Ok(v) => v,
-            Err(_) => return Err(()),
+            Err(()) => return Err(WorkspaceError::UnknownError),
         };
 
         Ok(Workspace {
@@ -76,8 +80,9 @@ impl Workspace {
                 entry.update_submodules
             );
             match entry.sync(entry.update_submodules) {
-                Ok(_) => {}
-                Err(_) => {
+                Ok(()) => {}
+                Err(err) => {
+                    log::error!("error synchronizing repository '{}': {}", entry.name, err);
                     return Err(());
                 }
             };

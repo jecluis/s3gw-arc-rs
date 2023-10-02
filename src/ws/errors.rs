@@ -59,3 +59,40 @@ impl Display for RepositoryError {
 }
 
 pub type RepositoryResult<T> = Result<T, RepositoryError>;
+
+#[derive(Clone, Copy, Debug)]
+pub enum WorkspaceError {
+    DoesNotExistError,
+    AlreadyExistsError,
+    ConfigError,
+    CreationError,
+    SyncError,
+
+    // create prompt errors
+    UserAborted,
+    UnknownPromptError,
+
+    // unknown error
+    UnknownError,
+}
+
+impl Display for WorkspaceError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            WorkspaceError::DoesNotExistError => "workspace does not exist",
+            WorkspaceError::AlreadyExistsError => "workspace already exists",
+            WorkspaceError::ConfigError => "config error",
+            WorkspaceError::CreationError => "error creating workspace",
+            WorkspaceError::SyncError => "error synchronizing workspace",
+
+            // create prompt errors
+            WorkspaceError::UserAborted => "aborted by user",
+            WorkspaceError::UnknownPromptError => "unknown prompt error",
+
+            // unknown error
+            WorkspaceError::UnknownError => "unknown error",
+        })
+    }
+}
+
+pub type WorkspaceResult<T> = Result<T, WorkspaceError>;

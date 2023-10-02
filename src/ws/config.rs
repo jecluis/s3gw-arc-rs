@@ -14,6 +14,10 @@
 
 use std::path::PathBuf;
 
+use crate::ws::errors::WorkspaceError;
+
+use super::errors::WorkspaceResult;
+
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct WSGitHubConfig {
     pub org: String,
@@ -136,7 +140,7 @@ impl Default for WSConfig {
 impl WSConfig {
     /// Write current config to 'path'. The file will be created if it does not exist.
     ///
-    pub fn write(self: &Self, path: &PathBuf) -> Result<(), ()> {
+    pub fn write(self: &Self, path: &PathBuf) -> WorkspaceResult<()> {
         let f = match std::fs::File::options()
             .create(true)
             .truncate(true)
@@ -144,17 +148,21 @@ impl WSConfig {
             .open(path)
         {
             Ok(v) => v,
-            Err(_) => {
-                log::error!("Error opening file for write at {}", path.display());
-                return Err(());
+            Err(err) => {
+                log::error!(
+                    "Error opening file for write at {}: {}",
+                    path.display(),
+                    err
+                );
+                return Err(WorkspaceError::ConfigError);
             }
         };
 
         match serde_json::to_writer_pretty(f, &self) {
             Ok(_) => {}
-            Err(_) => {
-                log::error!("Unable to write config to {}", path.display());
-                return Err(());
+            Err(err) => {
+                log::error!("Unable to write config to {}: {}", path.display(), err);
+                return Err(WorkspaceError::ConfigError);
             }
         };
         Ok(())
@@ -162,19 +170,19 @@ impl WSConfig {
 
     /// Read config at 'path', returning a 'WSConfig' if it exists.
     ///
-    pub fn read(path: &PathBuf) -> Result<WSConfig, ()> {
+    pub fn read(path: &PathBuf) -> WorkspaceResult<WSConfig> {
         let f = match std::fs::File::open(path) {
             Ok(v) => v,
-            Err(_) => {
-                log::error!("Error opening config at {}", path.display());
-                return Err(());
+            Err(err) => {
+                log::error!("Error opening config at {}: {}", path.display(), err);
+                return Err(WorkspaceError::ConfigError);
             }
         };
         let cfg: WSConfig = match serde_json::from_reader(f) {
             Ok(v) => v,
-            Err(_) => {
-                log::error!("Error reading config from {}", path.display());
-                return Err(());
+            Err(err) => {
+                log::error!("Error reading config from {}: {}", path.display(), err);
+                return Err(WorkspaceError::ConfigError);
             }
         };
         Ok(cfg)

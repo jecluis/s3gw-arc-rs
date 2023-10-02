@@ -14,9 +14,14 @@
 
 use inquire::{required, Confirm, Text};
 
-use super::config::{
-    WSConfig, WSGitHubConfig, WSGitRepoConfigValues, WSGitReposConfig, WSRegistryConfig,
-    WSUserConfig,
+use crate::ws::errors::WorkspaceError;
+
+use super::{
+    config::{
+        WSConfig, WSGitHubConfig, WSGitRepoConfigValues, WSGitReposConfig, WSRegistryConfig,
+        WSUserConfig,
+    },
+    errors::WorkspaceResult,
 };
 
 /// Prompt for a specific custom git repository. This is a helper function.
@@ -24,14 +29,20 @@ use super::config::{
 fn prompt_custom_git_repo_value(
     name: &str,
     default: &WSGitRepoConfigValues,
-) -> Result<Option<WSGitRepoConfigValues>, ()> {
+) -> WorkspaceResult<Option<WSGitRepoConfigValues>> {
     match Confirm::new(&format!("Set custom URIs for {}?", name))
         .with_default(true)
         .prompt()
     {
         Ok(false) => return Ok(None),
         Ok(true) => {}
-        Err(_) => return Err(()),
+        Err(err) => {
+            return Err(match err {
+                inquire::InquireError::OperationCanceled
+                | inquire::InquireError::OperationInterrupted => WorkspaceError::UserAborted,
+                _ => WorkspaceError::UnknownPromptError,
+            });
+        }
     };
 
     let ro = match Text::new(&format!("{} read-only URI:", name))
@@ -39,7 +50,13 @@ fn prompt_custom_git_repo_value(
         .prompt()
     {
         Ok(v) => v,
-        Err(_) => return Err(()),
+        Err(err) => {
+            return Err(match err {
+                inquire::InquireError::OperationCanceled
+                | inquire::InquireError::OperationInterrupted => WorkspaceError::UserAborted,
+                _ => WorkspaceError::UnknownPromptError,
+            });
+        }
     };
 
     let rw = match Text::new(&format!("{} read-write URI:", name))
@@ -47,7 +64,13 @@ fn prompt_custom_git_repo_value(
         .prompt()
     {
         Ok(v) => v,
-        Err(_) => return Err(()),
+        Err(err) => {
+            return Err(match err {
+                inquire::InquireError::OperationCanceled
+                | inquire::InquireError::OperationInterrupted => WorkspaceError::UserAborted,
+                _ => WorkspaceError::UnknownPromptError,
+            });
+        }
     };
 
     Ok(Some(WSGitRepoConfigValues {
@@ -69,13 +92,19 @@ fn prompt_custom_github_repo_value(
     org: &String,
     default_name: &str,
     default: &WSGitRepoConfigValues,
-) -> Result<WSGitRepoConfigValues, ()> {
+) -> WorkspaceResult<WSGitRepoConfigValues> {
     let repo = match Text::new(&format!("{:7} at {} /", name, org))
         .with_default(&default_name)
         .prompt()
     {
         Ok(v) => v,
-        Err(_) => return Err(()),
+        Err(err) => {
+            return Err(match err {
+                inquire::InquireError::OperationCanceled
+                | inquire::InquireError::OperationInterrupted => WorkspaceError::UserAborted,
+                _ => WorkspaceError::UnknownPromptError,
+            });
+        }
     };
 
     let gitless_repo = match repo.find(".git") {
@@ -99,19 +128,31 @@ fn prompt_custom_github_repo_value(
 
 /// Prompt for custom git repositories for the various tracked repositories.
 ///
-fn prompt_custom_git_repos(default: &WSGitReposConfig) -> Result<WSGitReposConfig, ()> {
+fn prompt_custom_git_repos(default: &WSGitReposConfig) -> WorkspaceResult<WSGitReposConfig> {
     let mut cfg = default.clone();
 
     if match Confirm::new("From GitHub?").with_default(true).prompt() {
         Ok(v) => v,
-        Err(_) => return Err(()),
+        Err(err) => {
+            return Err(match err {
+                inquire::InquireError::OperationCanceled
+                | inquire::InquireError::OperationInterrupted => WorkspaceError::UserAborted,
+                _ => WorkspaceError::UnknownPromptError,
+            });
+        }
     } {
         let org = match Text::new("Organization:")
             .with_default("aquarist-labs")
             .prompt()
         {
             Ok(v) => v,
-            Err(_) => return Err(()),
+            Err(err) => {
+                return Err(match err {
+                    inquire::InquireError::OperationCanceled
+                    | inquire::InquireError::OperationInterrupted => WorkspaceError::UserAborted,
+                    _ => WorkspaceError::UnknownPromptError,
+                });
+            }
         };
 
         let repo_vec = vec![
@@ -132,7 +173,7 @@ fn prompt_custom_git_repos(default: &WSGitReposConfig) -> Result<WSGitReposConfi
                     let tgt = entry.3;
                     *tgt = v;
                 }
-                Err(()) => return Err(()),
+                Err(err) => return Err(err),
             };
         }
 
@@ -154,7 +195,7 @@ fn prompt_custom_git_repos(default: &WSGitReposConfig) -> Result<WSGitReposConfi
                 let tgt = entry.2;
                 *tgt = v;
             }
-            Err(()) => return Err(()),
+            Err(err) => return Err(err),
         };
     }
 
@@ -163,14 +204,20 @@ fn prompt_custom_git_repos(default: &WSGitReposConfig) -> Result<WSGitReposConfi
 
 /// Prompt for a specific registry. This is a helper function.
 ///
-fn prompt_custom_registry_value(name: &str, default: &String) -> Result<Option<String>, ()> {
+fn prompt_custom_registry_value(name: &str, default: &String) -> WorkspaceResult<Option<String>> {
     match Confirm::new(&format!("Set custom registry URI for {}?", name))
         .with_default(true)
         .prompt()
     {
         Ok(false) => return Ok(None),
         Ok(true) => {}
-        Err(_) => return Err(()),
+        Err(err) => {
+            return Err(match err {
+                inquire::InquireError::OperationCanceled
+                | inquire::InquireError::OperationInterrupted => WorkspaceError::UserAborted,
+                _ => WorkspaceError::UnknownPromptError,
+            });
+        }
     };
 
     let uri = match Text::new(&format!("{} registry URI:", name))
@@ -178,26 +225,32 @@ fn prompt_custom_registry_value(name: &str, default: &String) -> Result<Option<S
         .prompt()
     {
         Ok(v) => v,
-        Err(_) => return Err(()),
+        Err(err) => {
+            return Err(match err {
+                inquire::InquireError::OperationCanceled
+                | inquire::InquireError::OperationInterrupted => WorkspaceError::UserAborted,
+                _ => WorkspaceError::UnknownPromptError,
+            });
+        }
     };
     Ok(Some(uri))
 }
 
 /// Prompt for custom registries for deliverable artifacts.
 ///
-fn prompt_custom_registries(default: &WSRegistryConfig) -> Result<WSRegistryConfig, ()> {
+fn prompt_custom_registries(default: &WSRegistryConfig) -> WorkspaceResult<WSRegistryConfig> {
     let mut cfg = default.clone();
 
     match prompt_custom_registry_value("s3gw", &cfg.s3gw) {
         Ok(None) => {}
         Ok(Some(v)) => cfg.s3gw = v,
-        Err(_) => return Err(()),
+        Err(err) => return Err(err),
     };
 
     match prompt_custom_registry_value("s3gw-ui", &cfg.ui) {
         Ok(None) => {}
         Ok(Some(v)) => cfg.ui = v,
-        Err(_) => return Err(()),
+        Err(err) => return Err(err),
     };
 
     Ok(cfg)
@@ -205,10 +258,16 @@ fn prompt_custom_registries(default: &WSRegistryConfig) -> Result<WSRegistryConf
 
 /// Prompt for user-related informations, such as the user's name, email, etc.
 ///
-fn prompt_user() -> Result<WSUserConfig, ()> {
+fn prompt_user() -> WorkspaceResult<WSUserConfig> {
     let name = match Text::new("User Name:").with_validator(required!()).prompt() {
         Ok(v) => v,
-        Err(_) => return Err(()),
+        Err(err) => {
+            return Err(match err {
+                inquire::InquireError::OperationCanceled
+                | inquire::InquireError::OperationInterrupted => WorkspaceError::UserAborted,
+                _ => WorkspaceError::UnknownPromptError,
+            });
+        }
     };
     let email = match Text::new("User email:")
         .with_validator(|v: &str| {
@@ -223,14 +282,26 @@ fn prompt_user() -> Result<WSUserConfig, ()> {
         .prompt()
     {
         Ok(v) => v,
-        Err(_) => return Err(()),
+        Err(err) => {
+            return Err(match err {
+                inquire::InquireError::OperationCanceled
+                | inquire::InquireError::OperationInterrupted => WorkspaceError::UserAborted,
+                _ => WorkspaceError::UnknownPromptError,
+            });
+        }
     };
     let signing_key = match Text::new("Signing key:")
         .with_validator(required!())
         .prompt()
     {
         Ok(v) => v,
-        Err(_) => return Err(()),
+        Err(err) => {
+            return Err(match err {
+                inquire::InquireError::OperationCanceled
+                | inquire::InquireError::OperationInterrupted => WorkspaceError::UserAborted,
+                _ => WorkspaceError::UnknownPromptError,
+            });
+        }
     };
     let ghtoken = match Text::new("GitHub token:")
         .with_validator(|v: &str| {
@@ -245,7 +316,13 @@ fn prompt_user() -> Result<WSUserConfig, ()> {
         .prompt()
     {
         Ok(v) => v,
-        Err(_) => return Err(()),
+        Err(err) => {
+            return Err(match err {
+                inquire::InquireError::OperationCanceled
+                | inquire::InquireError::OperationInterrupted => WorkspaceError::UserAborted,
+                _ => WorkspaceError::UnknownPromptError,
+            });
+        }
     };
 
     Ok(WSUserConfig {
@@ -258,12 +335,12 @@ fn prompt_user() -> Result<WSUserConfig, ()> {
 
 /// Prompt the user for values required to initiate a new workspace.
 ///
-pub fn init_prompt(default_config: &WSConfig) -> Result<WSConfig, ()> {
+pub fn init_prompt(default_config: &WSConfig) -> WorkspaceResult<WSConfig> {
     let mut cfg = default_config.clone();
 
     match prompt_user() {
         Ok(v) => cfg.user = v,
-        Err(_) => return Err(()),
+        Err(err) => return Err(err),
     };
 
     match Confirm::new("Do you want to setup custom git repositories?")
@@ -273,11 +350,17 @@ pub fn init_prompt(default_config: &WSConfig) -> Result<WSConfig, ()> {
         Ok(true) => {
             match prompt_custom_git_repos(&default_config.git) {
                 Ok(v) => cfg.git = v,
-                Err(_) => return Err(()),
+                Err(err) => return Err(err),
             };
         }
         Ok(false) => {}
-        Err(_) => return Err(()),
+        Err(err) => {
+            return Err(match err {
+                inquire::InquireError::OperationInterrupted
+                | inquire::InquireError::OperationCanceled => WorkspaceError::UserAborted,
+                _ => WorkspaceError::UnknownError,
+            });
+        }
     };
 
     log::trace!(
@@ -292,11 +375,17 @@ pub fn init_prompt(default_config: &WSConfig) -> Result<WSConfig, ()> {
         Ok(true) => {
             match prompt_custom_registries(&default_config.registry) {
                 Ok(v) => cfg.registry = v,
-                Err(_) => return Err(()),
+                Err(err) => return Err(err),
             };
         }
         Ok(false) => {}
-        Err(_) => return Err(()),
+        Err(err) => {
+            return Err(match err {
+                inquire::InquireError::OperationInterrupted
+                | inquire::InquireError::OperationCanceled => WorkspaceError::UserAborted,
+                _ => WorkspaceError::UnknownError,
+            });
+        }
     };
 
     Ok(cfg)
