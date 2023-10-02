@@ -14,6 +14,11 @@
 
 use super::repo::GitRepo;
 
+// NOTE(joao): this file contains dead code. It's full of auxiliary functions
+// that were created for one reason or another, but are not currently used. They
+// are being left in the repo because 1) they can act as good examples on how to
+// achieve some things, and 2) they may be useful at some point, maybe?
+
 impl GitRepo {
     pub fn _get_default_branch(self: &Self) -> String {
         let head_ref = self
