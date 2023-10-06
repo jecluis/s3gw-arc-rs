@@ -18,7 +18,7 @@ use crate::ws::errors::WorkspaceError;
 
 use super::{
     config::{
-        WSConfig, WSGitHubConfig, WSGitRepoConfigValues, WSGitReposConfig, WSRegistryConfig,
+        WSConfig, WSGitHubConfig, WSGitRepoConfigValues, WSGitReposConfig, WSQuayRegistryConfig,
         WSUserConfig,
     },
     errors::WorkspaceResult,
@@ -202,26 +202,26 @@ fn prompt_custom_git_repos(default: &WSGitReposConfig) -> WorkspaceResult<WSGitR
     Ok(cfg)
 }
 
-/// Prompt for a specific registry. This is a helper function.
+/// Prompt for quay registries for deliverable artifacts.
 ///
-fn prompt_custom_registry_value(name: &str, default: &String) -> WorkspaceResult<Option<String>> {
-    match Confirm::new(&format!("Set custom registry URI for {}?", name))
-        .with_default(true)
-        .prompt()
-    {
-        Ok(false) => return Ok(None),
-        Ok(true) => {}
-        Err(err) => {
-            return Err(match err {
-                inquire::InquireError::OperationCanceled
-                | inquire::InquireError::OperationInterrupted => WorkspaceError::UserAborted,
-                _ => WorkspaceError::UnknownPromptError,
-            });
-        }
+fn prompt_registries(default: &WSQuayRegistryConfig) -> WorkspaceResult<WSQuayRegistryConfig> {
+    let s3gw = match prompt_single_registry_repo(&"s3gw".into(), &default.s3gw) {
+        Ok(v) => v,
+        Err(err) => return Err(err),
+    };
+    let ui = match prompt_single_registry_repo(&"s3gw-ui".into(), &default.ui) {
+        Ok(v) => v,
+        Err(err) => return Err(err),
     };
 
-    let uri = match Text::new(&format!("{} registry URI:", name))
-        .with_default(&default)
+    Ok(WSQuayRegistryConfig { s3gw, ui })
+}
+
+/// Prompt for a single repository's location (i.e., namespace/repository).
+///
+fn prompt_single_registry_repo(name: &String, default_repo: &String) -> WorkspaceResult<String> {
+    let repo = match Text::new(&format!("{:7} at quay.io/", name))
+        .with_default(&default_repo)
         .prompt()
     {
         Ok(v) => v,
@@ -233,27 +233,8 @@ fn prompt_custom_registry_value(name: &str, default: &String) -> WorkspaceResult
             });
         }
     };
-    Ok(Some(uri))
-}
 
-/// Prompt for custom registries for deliverable artifacts.
-///
-fn prompt_custom_registries(default: &WSRegistryConfig) -> WorkspaceResult<WSRegistryConfig> {
-    let mut cfg = default.clone();
-
-    match prompt_custom_registry_value("s3gw", &cfg.s3gw) {
-        Ok(None) => {}
-        Ok(Some(v)) => cfg.s3gw = v,
-        Err(err) => return Err(err),
-    };
-
-    match prompt_custom_registry_value("s3gw-ui", &cfg.ui) {
-        Ok(None) => {}
-        Ok(Some(v)) => cfg.ui = v,
-        Err(err) => return Err(err),
-    };
-
-    Ok(cfg)
+    Ok(repo)
 }
 
 /// Prompt for user-related informations, such as the user's name, email, etc.
@@ -368,17 +349,20 @@ pub fn init_prompt(default_config: &WSConfig) -> WorkspaceResult<WSConfig> {
         serde_json::to_string_pretty(&cfg.git).unwrap()
     );
 
-    match Confirm::new("Do you want to setup custom registries?")
-        .with_default(false)
+    match Confirm::new("Use Quay as the registry?")
+        .with_default(true)
         .prompt()
     {
-        Ok(true) => {
-            match prompt_custom_registries(&default_config.registry) {
-                Ok(v) => cfg.registry = v,
-                Err(err) => return Err(err),
-            };
+        Ok(false) => {
+            cfg.registry = None;
         }
-        Ok(false) => {}
+        Ok(true) => {
+            let default_registry = default_config.registry.as_ref().unwrap();
+            cfg.registry = match prompt_registries(&default_registry) {
+                Ok(v) => Some(v),
+                Err(err) => return Err(err),
+            }
+        }
         Err(err) => {
             return Err(match err {
                 inquire::InquireError::OperationInterrupted

@@ -44,7 +44,7 @@ pub struct WSGitReposConfig {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
-pub struct WSRegistryConfig {
+pub struct WSQuayRegistryConfig {
     pub s3gw: String,
     pub ui: String,
 }
@@ -72,7 +72,7 @@ impl Default for WSUserConfig {
 pub struct WSConfig {
     pub user: WSUserConfig,
     pub git: WSGitReposConfig,
-    pub registry: WSRegistryConfig,
+    pub registry: Option<WSQuayRegistryConfig>,
 }
 
 impl Default for WSConfig {
@@ -129,10 +129,10 @@ impl Default for WSConfig {
                     branch_format: String::from("v{{major}}.{{minor}}"),
                 },
             },
-            registry: WSRegistryConfig {
-                s3gw: String::from("quay.io/s3gw/s3gw"),
-                ui: String::from("quay.io/s3gw/s3gw-ui"),
-            },
+            registry: Some(WSQuayRegistryConfig {
+                s3gw: "s3gw/s3gw".into(),
+                ui: "s3gw/s3gw-ui".into(),
+            }),
         }
     }
 }

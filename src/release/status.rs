@@ -12,11 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeMap, fmt::Display};
+use std::{
+    collections::{BTreeMap, HashMap},
+    fmt::Display,
+};
 
 use colored::Colorize;
 
 use crate::{boomln, errorln, version::Version, ws::workspace::Workspace};
+
+// ----
+// raw responses from GitHub for workflow runs
+// ----
 
 #[derive(serde::Deserialize)]
 struct GitHubRunResult {
@@ -48,6 +55,29 @@ pub(crate) struct GitHubWorkflowResult {
     #[allow(dead_code)]
     url: String,
 }
+
+/// ----
+/// end of raw responses from GitHub for workflow runs
+/// ----
+
+/// ----
+/// raw responses from Quay.io for repository tags
+/// ----
+
+#[derive(serde::Deserialize)]
+pub(crate) struct QuayRepositoryTagResult {
+    tags: HashMap<String, QuayRepositoryTagEntry>,
+}
+
+#[derive(serde::Deserialize)]
+pub(crate) struct QuayRepositoryTagEntry {
+    #[allow(dead_code)]
+    name: String,
+}
+
+/// ----
+/// end of raw responses from Quay.io for repository tags
+/// ----
 
 pub enum ReleaseWorkflowStatus {
     UNKNOWN,
@@ -178,6 +208,15 @@ impl ReleaseWorkflowResult {
     }
 }
 
+pub(crate) struct QuayStatus {
+    s3gw: HashMap<String, QuayRepositoryTagEntry>,
+    ui: HashMap<String, QuayRepositoryTagEntry>,
+}
+
+/// Print release status for each release version in the provided 'releases'
+/// tree. This function will obtain information for each release from multiple
+/// sources, including the local repositories, github, and quay.
+///
 pub async fn status(ws: &Workspace, releases: &BTreeMap<u64, Version>) {
     let is_github_repo = match ws.repos.s3gw.config.github {
         Some(_) => true,
@@ -186,36 +225,52 @@ pub async fn status(ws: &Workspace, releases: &BTreeMap<u64, Version>) {
     // github token must be something more than just 'ghp_'
     let has_github_token = ws.config.user.github_token.len() > 4;
 
-    if is_github_repo && has_github_token {
-        github_status(&ws, &releases).await;
-    } else {
-        basic_status(&releases);
-    }
-}
+    let quay_status = match get_quay_status(&ws).await {
+        Ok(res) => res,
+        Err(()) => None,
+    };
 
-fn basic_status(releases: &BTreeMap<u64, Version>) {
+    let mut table = crate::release::common::StatusTable::default();
     for relver in releases.values() {
-        println!("- found {}", relver);
-    }
-}
+        let table_entry = table.new_entry(&relver);
 
-async fn github_status(ws: &Workspace, releases: &BTreeMap<u64, Version>) {
-    for relver in releases.values() {
-        let latest_run = match get_release_status(&ws, &relver).await {
-            Ok(v) => v,
-            Err(()) => {
-                boomln!("Unable to obtain latest workflow for version {}", relver);
-                return;
+        // get github status
+        if is_github_repo && has_github_token {
+            if let Some(s) = get_github_status_str(&ws, &relver).await {
+                table_entry.add_record(&s);
             }
-        };
-
-        if latest_run.is_some() {
-            let run = latest_run.unwrap();
-            show_run_status(&run.tag, &run);
+        }
+        if let Some(s) = &quay_status {
+            let status_str = get_quay_status_str(&relver, &s);
+            table_entry.add_record(&status_str);
         }
     }
+
+    println!("{}", table);
 }
 
+/// Returns a prettified release workflow run status string for the specified
+/// release version, if any is available.
+///
+async fn get_github_status_str(ws: &Workspace, relver: &Version) -> Option<String> {
+    let latest_run = match get_release_status(&ws, &relver).await {
+        Ok(v) => v,
+        Err(()) => {
+            errorln!("Unable to obtain latest workflow for version {}", relver);
+            return None;
+        }
+    };
+    if latest_run.is_some() {
+        return Some(get_github_run_status_str(&latest_run.unwrap()));
+    }
+    None
+}
+
+/// Obtain workflow runs from specified 'org' and 'repo', for the specified
+/// tag/branch 'tag'. Returns a vector of 'GitHubWorkflowResult', containing the
+/// raw response from github for each individual workflow run matching said
+/// 'tag'. Result needs to be handled by the caller to make it useful.
+///
 async fn github_get_workflows_status(
     org: &String,
     repo: &String,
@@ -251,6 +306,13 @@ async fn github_get_workflows_status(
     return Ok(runs);
 }
 
+/// Obtain the latest release workflow for the specified tag or branch, 'tag',
+/// for the specified 'org' and 'repo'. This function works by first obtaining
+/// all workflow runs that match said 'tag', and then filtering them for the
+/// specific release workflow name, ignoring those that are yet to be populated
+/// (this should not happen by the way), and finally returning solely the latest
+/// one, if available.
+///
 pub async fn github_get_latest_release_workflow(
     org: &String,
     repo: &String,
@@ -297,6 +359,11 @@ pub async fn github_get_latest_release_workflow(
     }
 }
 
+/// Obtain release status from github, for the specified release version. This
+/// function is simply a helper to translate our github configuration into
+/// something that can be called against github. Returns the latest workflow run
+/// available for the provided release version, if any is available.
+///
 pub async fn get_release_status(
     ws: &Workspace,
     relver: &Version,
@@ -322,7 +389,9 @@ pub async fn get_release_status(
         .await
 }
 
-fn show_run_status(tag: &String, run: &ReleaseWorkflowResult) {
+/// Returns a status string for a given release workflow run, with pretty formatting.
+///
+fn get_github_run_status_str(run: &ReleaseWorkflowResult) -> String {
     let status_str = &run.status.to_string();
     let status = match &run.status {
         ReleaseWorkflowStatus::COMPLETED => status_str.green(),
@@ -339,13 +408,84 @@ fn show_run_status(tag: &String, run: &ReleaseWorkflowResult) {
         },
     };
 
-    println!(
-        "{:15}   status: {}, conclusion: {}  {:12}  ({} attempt{})",
-        tag,
+    format!(
+        "status: {}, conclusion: {}  {:12}  ({} attempt{})",
         status,
         success,
         run.to_duration_str(),
         run.num_attempts,
         if run.num_attempts == 1 { "" } else { "s" }
-    );
+    )
+}
+
+/// Obtain all tags from the specified repository 'repo' in the namespace 'ns',
+/// from quay.io. Returns a hash map of 'QuayRepositoryTagEntry', if
+/// successfull.
+///
+async fn quay_get_tags(repo: &String) -> Result<HashMap<String, QuayRepositoryTagEntry>, ()> {
+    let api_url = format!("https://quay.io/api/v1/repository/{}", repo);
+
+    let response = match reqwest::Client::new()
+        .get(&api_url)
+        .query(&[("includeTags", "true")])
+        .send()
+        .await
+    {
+        Ok(r) => r,
+        Err(err) => {
+            errorln!("Unable to obtain tags from quay for '{}': {}", repo, err);
+            return Err(());
+        }
+    };
+
+    let tags = match response.json::<QuayRepositoryTagResult>().await {
+        Ok(r) => r.tags,
+        Err(err) => {
+            boomln!(
+                "Unable to obtain resulting tags from quay for '{}': {}",
+                repo,
+                err
+            );
+            return Err(());
+        }
+    };
+    Ok(tags)
+}
+
+/// Obtain status from quay for the various repositories we want.
+///
+async fn get_quay_status(ws: &Workspace) -> Result<Option<QuayStatus>, ()> {
+    let cfg = match &ws.config.registry {
+        Some(c) => c,
+        None => return Ok(None),
+    };
+
+    let s3gw = if let Ok(res) = quay_get_tags(&cfg.s3gw).await {
+        res
+    } else {
+        return Err(());
+    };
+    let ui = if let Ok(res) = quay_get_tags(&cfg.ui).await {
+        res
+    } else {
+        return Err(());
+    };
+
+    Ok(Some(QuayStatus { s3gw, ui }))
+}
+
+fn get_quay_status_str(relver: &Version, quay_status: &QuayStatus) -> String {
+    let relstr = format!("v{}", relver);
+
+    let s3gw_str = if let Some(_) = quay_status.s3gw.get(&relstr) {
+        "found".green().to_string()
+    } else {
+        "not found".yellow().to_string()
+    };
+    let ui_str = if let Some(_) = quay_status.ui.get(&relstr) {
+        "found".green().to_string()
+    } else {
+        "not found".yellow().to_string()
+    };
+    format!("images: s3gw = {}, s3gw-ui = {}", s3gw_str, ui_str)
 }

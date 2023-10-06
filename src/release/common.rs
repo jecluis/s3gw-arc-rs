@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, fmt::Display};
 
 use crate::{
     version::Version,
@@ -46,4 +46,74 @@ pub fn get_release_versions_from_repo(
     }
 
     versions
+}
+
+pub struct StatusTable {
+    pub entries: BTreeMap<u64, StatusTableEntry>,
+}
+
+pub struct StatusTableEntry {
+    pub version: Version,
+    pub records: Vec<String>,
+}
+
+impl Default for StatusTable {
+    fn default() -> Self {
+        StatusTable {
+            entries: BTreeMap::new(),
+        }
+    }
+}
+
+impl Display for StatusTable {
+    fn fmt(self: &Self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for entry in self.entries.values() {
+            let mut output_version = true;
+            for rec in &entry.records {
+                let ver_str = if output_version {
+                    output_version = false;
+                    format!("v{}", entry.version.get_version_str())
+                } else {
+                    String::new()
+                };
+
+                if let Err(err) = f.write_fmt(format_args!("{:15}   {}\n", ver_str, rec)) {
+                    return Err(err);
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl StatusTable {
+    pub fn new_entry(self: &mut Self, ver: &Version) -> &mut StatusTableEntry {
+        let entry = StatusTableEntry::new(&ver);
+        self.entries.insert(ver.get_version_id(), entry);
+        self.entries.get_mut(&ver.get_version_id()).unwrap()
+    }
+
+    pub fn _add_record(self: &mut Self, ver: &Version, rec: &String) {
+        let verid = ver.get_version_id();
+        let entry = if !self.entries.contains_key(&verid) {
+            self.new_entry(ver)
+        } else {
+            self.entries.get_mut(&verid).unwrap()
+        };
+        entry.add_record(&rec);
+    }
+}
+
+impl StatusTableEntry {
+    pub fn new(ver: &Version) -> StatusTableEntry {
+        StatusTableEntry {
+            version: ver.clone(),
+            records: vec![],
+        }
+    }
+
+    pub fn add_record(self: &mut Self, rec: &String) {
+        self.records.push(rec.clone());
+    }
 }
