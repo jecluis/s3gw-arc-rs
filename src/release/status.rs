@@ -44,7 +44,6 @@ pub(crate) struct GitHubWorkflowResult {
     #[allow(dead_code)]
     updated_at: chrono::DateTime<chrono::Utc>,
     run_started_at: chrono::DateTime<chrono::Utc>,
-    #[allow(dead_code)]
     run_attempt: u64,
     #[allow(dead_code)]
     url: String,
@@ -78,6 +77,7 @@ pub struct ReleaseWorkflowResult {
     pub tag: String,
     pub status: ReleaseWorkflowStatus,
     pub success: bool,
+    pub num_attempts: u64,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub updated_at: chrono::DateTime<chrono::Utc>,
     pub started_at: chrono::DateTime<chrono::Utc>,
@@ -156,6 +156,7 @@ impl ReleaseWorkflowResult {
             tag,
             status,
             success,
+            num_attempts: res.run_attempt,
             created_at: res.created_at,
             updated_at: res.updated_at,
             started_at: res.run_started_at,
@@ -339,10 +340,12 @@ fn show_run_status(tag: &String, run: &ReleaseWorkflowResult) {
     };
 
     println!(
-        "{:20}   status: {}, conclusion: {}  ({})",
+        "{:15}   status: {}, conclusion: {}  {:12}  ({} attempt{})",
         tag,
         status,
         success,
-        run.to_duration_str()
+        run.to_duration_str(),
+        run.num_attempts,
+        if run.num_attempts == 1 { "" } else { "s" }
     );
 }
