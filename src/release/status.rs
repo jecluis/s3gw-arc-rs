@@ -240,6 +240,7 @@ pub async fn status(ws: &Workspace, releases: &BTreeMap<u64, Version>) {
                 table_entry.add_record(&s);
             }
         }
+        // get image tag status from quay
         if let Some(s) = &quay_status {
             let status_str = get_quay_status_str(&relver, &s);
             table_entry.add_record(&status_str);
@@ -474,18 +475,23 @@ async fn get_quay_status(ws: &Workspace) -> Result<Option<QuayStatus>, ()> {
     Ok(Some(QuayStatus { s3gw, ui }))
 }
 
+/// Obtain status string from quay for a specific release version.
+///
 fn get_quay_status_str(relver: &Version, quay_status: &QuayStatus) -> String {
     let relstr = format!("v{}", relver);
 
-    let s3gw_str = if let Some(_) = quay_status.s3gw.get(&relstr) {
-        "found".green().to_string()
-    } else {
-        "not found".yellow().to_string()
-    };
-    let ui_str = if let Some(_) = quay_status.ui.get(&relstr) {
-        "found".green().to_string()
-    } else {
-        "not found".yellow().to_string()
-    };
+    fn get_status_from_map(
+        map: &HashMap<String, QuayRepositoryTagEntry>,
+        relstr: &String,
+    ) -> String {
+        if let Some(_) = map.get(relstr) {
+            "found".green().to_string()
+        } else {
+            "not found".yellow().to_string()
+        }
+    }
+
+    let s3gw_str = get_status_from_map(&quay_status.s3gw, &relstr);
+    let ui_str = get_status_from_map(&quay_status.ui, &relstr);
     format!("images: s3gw = {}, s3gw-ui = {}", s3gw_str, ui_str)
 }
