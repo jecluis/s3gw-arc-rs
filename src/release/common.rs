@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeMap, fmt::Display};
+use std::{
+    collections::BTreeMap,
+    fmt::{Display, Write},
+};
 
 use crate::{
     version::Version,
@@ -67,6 +70,30 @@ impl Default for StatusTable {
 
 impl Display for StatusTable {
     fn fmt(self: &Self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut longest_line = 0;
+        for entry in self.entries.values() {
+            let max_len = entry
+                .records
+                .iter()
+                .map(|rec| {
+                    let stripped = cleanup_formatted_str(&rec);
+                    stripped.len() // line length
+                + 15 // prefix length
+                + 3 // spacing
+                + 2 // buffer
+                })
+                .max()
+                .unwrap_or(0);
+            if max_len > longest_line {
+                longest_line = max_len;
+            }
+        }
+        let divider_strong = (0..longest_line).map(|_| '\u{2500}').collect::<String>();
+        let divider_light = (0..longest_line).map(|_| '\u{254c}').collect::<String>();
+
+        f.write_char('\n').unwrap();
+        f.write_str(&divider_strong).unwrap();
+        f.write_char('\n').unwrap();
         for entry in self.entries.values() {
             let mut output_version = true;
             for rec in &entry.records {
@@ -81,10 +108,36 @@ impl Display for StatusTable {
                     return Err(err);
                 }
             }
+            f.write_str(&divider_light).unwrap();
+            f.write_char('\n').unwrap();
         }
 
         Ok(())
     }
+}
+
+/// Clean up a formatted string, removing all terminal ANSI characters that
+/// allow for the coloring and stuff.
+///
+fn cleanup_formatted_str(s: &String) -> String {
+    let mut in_format = false;
+    let mut final_str = String::new();
+
+    for c in s.chars() {
+        if c.is_control() {
+            in_format = true;
+            continue;
+        }
+        if in_format {
+            if c == 'm' {
+                in_format = false;
+            }
+            continue;
+        }
+        final_str.push(c);
+    }
+
+    final_str
 }
 
 impl StatusTable {
