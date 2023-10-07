@@ -34,20 +34,6 @@ impl GitRepo {
         String::from(branch)
     }
 
-    pub fn _get_graph_diff(
-        self: &Self,
-        local: git2::Oid,
-        upstream: git2::Oid,
-    ) -> Result<(usize, usize), ()> {
-        match self.repo.graph_ahead_behind(local, upstream) {
-            Ok(v) => Ok(v),
-            Err(e) => {
-                log::error!("Unable to obtain graph diff: {}", e);
-                Err(())
-            }
-        }
-    }
-
     pub fn _test_ssh(self: &Self) {
         let mut remote = self.get_remote("rw").unwrap();
         let mut conn = match self.open_remote(&mut remote, git2::Direction::Fetch, true) {

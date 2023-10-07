@@ -878,4 +878,81 @@ impl Repository {
 
         Ok(())
     }
+
+    /// Get how many commits ahead and behind a given version is compared to its
+    /// release branch's HEAD.
+    ///
+    pub fn diff_head(
+        self: &Self,
+        version: &Version,
+        is_tag: bool,
+    ) -> RepositoryResult<(usize, usize)> {
+        let git = match git::repo::GitRepo::open(&self.path) {
+            Ok(r) => r,
+            Err(()) => {
+                log::error!("Unable to open git repository at '{}'", self.path.display());
+                return Err(RepositoryError::UnableToOpenRepositoryError);
+            }
+        };
+
+        let refname = self.version_to_str(&version, is_tag);
+        let refspec = format!(
+            "refs/{}/{}",
+            match is_tag {
+                true => "tags",
+                false => "heads",
+            },
+            refname
+        );
+
+        let head_name = self.version_to_str(&version.get_base_version(), false);
+
+        // find head with name 'head_name'
+        let head_ref = match self.get_heads_refs() {
+            Ok(v) => match v.iter().find(|e| e.name == head_name) {
+                None => {
+                    errorln!("Unable to find release branch for '{}'", head_name);
+                    return Err(RepositoryError::UnknownBranchError);
+                }
+                Some(b) => b.clone(),
+            },
+            Err(err) => {
+                errorln!(
+                    "Unable to obtain branches for repository '{}': {}",
+                    self.name,
+                    err
+                );
+                return Err(err);
+            }
+        };
+        let head_refspec = format!("refs/heads/{}", head_name);
+
+        // if branch is not locally found, fetch it first.
+        if head_ref.has_remote && !head_ref.has_local {
+            match git.fetch(&head_refspec, &head_name) {
+                Ok(()) => {
+                    log::debug!("fetched '{}' to '{}", head_refspec, head_name);
+                }
+                Err(()) => {
+                    errorln!("Error fetching '{}' to '{}'", head_refspec, head_name);
+                    return Err(RepositoryError::FetchingError);
+                }
+            };
+        } else if !head_ref.has_remote && !head_ref.has_local {
+            boomln!("Unexpected branch without local or remote reference");
+            return Err(RepositoryError::UnknownError);
+        }
+
+        match git.diff(&refspec, &head_refspec) {
+            Ok(res) => Ok(res),
+            Err(()) => {
+                errorln!(
+                    "Unable to obtain commit diff between '{}' and '{}'",
+                    refname,
+                    head_name
+                );
+                Err(RepositoryError::DiffError)
+            }
+        }
+    }
 }

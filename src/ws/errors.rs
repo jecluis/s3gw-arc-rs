@@ -22,6 +22,7 @@ pub enum RepositoryError {
     UnknownSHA1Error,
     SubmoduleHeadUpdateError,
     StagingError,
+    DiffError,
 
     // git related errors
     FetchingError,
@@ -43,6 +44,7 @@ impl Display for RepositoryError {
             RepositoryError::UnknownSHA1Error => "unknown SHA1",
             RepositoryError::SubmoduleHeadUpdateError => "error updating submodule HEAD",
             RepositoryError::StagingError => "error staging paths",
+            RepositoryError::DiffError => "error obtaining commit difference",
 
             // git related errors
             RepositoryError::FetchingError => "error fetching from remote",

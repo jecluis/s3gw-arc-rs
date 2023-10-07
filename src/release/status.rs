@@ -19,7 +19,13 @@ use std::{
 
 use colored::Colorize;
 
-use crate::{boomln, common::UpdateProgress, errorln, version::Version, ws::workspace::Workspace};
+use crate::{
+    boomln,
+    common::UpdateProgress,
+    errorln,
+    version::Version,
+    ws::{repository::Repository, workspace::Workspace},
+};
 
 // ----
 // raw responses from GitHub for workflow runs
@@ -236,6 +242,9 @@ pub async fn status(ws: &Workspace, releases: &BTreeMap<u64, Version>) {
     let mut table = crate::release::common::StatusTable::default();
     for relver in releases.values() {
         let table_entry = table.new_entry(&relver);
+
+        let diff_str = get_commit_diff_status_str(&ws.repos.s3gw, &relver);
+        table_entry.add_record(&diff_str);
 
         // get github status
         if is_github_repo && has_github_token {
@@ -498,4 +507,38 @@ fn get_quay_status_str(relver: &Version, quay_status: &QuayStatus) -> String {
     let s3gw_str = get_status_from_map(&quay_status.s3gw, &relstr);
     let ui_str = get_status_from_map(&quay_status.ui, &relstr);
     format!("images: s3gw = {}, s3gw-ui = {}", s3gw_str, ui_str)
+}
+
+/// Obtain status string representing commit distance from 'relver' to its
+/// release branch's HEAD.
+///
+fn get_commit_diff_status_str(repo: &Repository, relver: &Version) -> String {
+    let (ahead, behind) = repo.diff_head(&relver, true).unwrap();
+
+    fn do_plural(value: usize) -> String {
+        if value > 1 {
+            "s".into()
+        } else {
+            "".into()
+        }
+    }
+
+    if ahead == 0 && behind == 0 {
+        return "up to date with HEAD".into();
+    }
+
+    format!(
+        "{}{}{}",
+        if ahead > 0 {
+            format!("{} commit{} ahead", ahead, do_plural(ahead))
+        } else {
+            "".into()
+        },
+        if ahead > 0 && behind > 0 { "," } else { "" },
+        if behind > 0 {
+            format!("{} commit{} behind", behind, do_plural(behind))
+        } else {
+            "".into()
+        }
+    )
 }

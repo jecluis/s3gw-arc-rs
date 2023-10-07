@@ -620,4 +620,46 @@ impl GitRepo {
 
         Ok(())
     }
+
+    /// Obtain the difference in commits between a given refspec and a specified head.
+    ///
+    pub fn diff(
+        self: &Self,
+        refspec: &String,
+        head_refspec: &String,
+    ) -> Result<(usize, usize), ()> {
+        let head_oid = match self.get_oid_by_refspec(&head_refspec) {
+            Ok(obj) => obj.id(),
+            Err(()) => {
+                log::error!("Unable to obtain oid for refspec '{}'", head_refspec);
+                return Err(());
+            }
+        };
+        let refspec_oid = match self.get_oid_by_refspec(&refspec) {
+            Ok(obj) => obj.peel_to_commit().unwrap().id(),
+            Err(()) => return Err(()),
+        };
+
+        log::trace!("diff_head: head = {}, refspec = {}", head_oid, refspec_oid);
+
+        let res = self.get_graph_diff(refspec_oid, head_oid).unwrap();
+        Ok(res)
+    }
+
+    /// Get how many commits a given 'local' is ahead and behind compared to a
+    /// given 'upstream'.
+    ///
+    fn get_graph_diff(
+        self: &Self,
+        local: git2::Oid,
+        upstream: git2::Oid,
+    ) -> Result<(usize, usize), ()> {
+        match self.repo.graph_ahead_behind(local, upstream) {
+            Ok(v) => Ok(v),
+            Err(e) => {
+                log::error!("Unable to obtain graph diff: {}", e);
+                Err(())
+            }
+        }
+    }
 }
