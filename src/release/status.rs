@@ -423,7 +423,7 @@ fn get_github_run_status_str(run: &ReleaseWorkflowResult) -> String {
     };
 
     format!(
-        "status: {}, conclusion: {}  {:12}  ({} attempt{})",
+        "build status: {}, conclusion: {}  {:12}  ({} attempt{})",
         status,
         success,
         run.to_duration_str(),
