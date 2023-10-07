@@ -19,7 +19,7 @@ use std::{
 
 use colored::Colorize;
 
-use crate::{boomln, errorln, version::Version, ws::workspace::Workspace};
+use crate::{boomln, common::UpdateProgress, errorln, version::Version, ws::workspace::Workspace};
 
 // ----
 // raw responses from GitHub for workflow runs
@@ -218,6 +218,9 @@ pub(crate) struct QuayStatus {
 /// sources, including the local repositories, github, and quay.
 ///
 pub async fn status(ws: &Workspace, releases: &BTreeMap<u64, Version>) {
+    let progress = UpdateProgress::new(&"gather information".into());
+    progress.start();
+
     let is_github_repo = match ws.repos.s3gw.config.github {
         Some(_) => true,
         None => false,
@@ -247,6 +250,7 @@ pub async fn status(ws: &Workspace, releases: &BTreeMap<u64, Version>) {
         }
     }
 
+    progress.finish();
     println!("{}", table);
 }
 
