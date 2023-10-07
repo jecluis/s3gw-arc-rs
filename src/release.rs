@@ -133,6 +133,6 @@ impl Release {
             return;
         };
 
-        status::status(&self.ws, &release_versions).await;
+        status::status(&self.ws, &version, &release_versions).await;
     }
 }

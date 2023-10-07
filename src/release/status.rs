@@ -27,6 +27,8 @@ use crate::{
     ws::{repository::Repository, workspace::Workspace},
 };
 
+use super::common;
+
 // ----
 // raw responses from GitHub for workflow runs
 // ----
@@ -223,7 +225,7 @@ pub(crate) struct QuayStatus {
 /// tree. This function will obtain information for each release from multiple
 /// sources, including the local repositories, github, and quay.
 ///
-pub async fn status(ws: &Workspace, releases: &BTreeMap<u64, Version>) {
+pub async fn status(ws: &Workspace, version: &Version, releases: &BTreeMap<u64, Version>) {
     let progress = UpdateProgress::new(&"gather information".into());
     progress.start();
 
@@ -261,6 +263,14 @@ pub async fn status(ws: &Workspace, releases: &BTreeMap<u64, Version>) {
 
     progress.finish();
     println!("{}", table);
+
+    match show_per_repo_diff(&ws, &version) {
+        Ok(()) => {}
+        Err(()) => {
+            boomln!("Error obtaining per repository commit diffs");
+            return;
+        }
+    };
 }
 
 /// Returns a prettified release workflow run status string for the specified
@@ -509,12 +519,15 @@ fn get_quay_status_str(relver: &Version, quay_status: &QuayStatus) -> String {
     format!("images: s3gw = {}, s3gw-ui = {}", s3gw_str, ui_str)
 }
 
-/// Obtain status string representing commit distance from 'relver' to its
-/// release branch's HEAD.
+/// Obtain a human readable string stating the commit difference for the
+/// specified 'target'.
 ///
-fn get_commit_diff_status_str(repo: &Repository, relver: &Version) -> String {
-    let (ahead, behind) = repo.diff_head(&relver, true).unwrap();
-
+fn get_human_readable_diff(
+    ahead: usize,
+    behind: usize,
+    source: Option<&String>,
+    target: &String,
+) -> String {
     fn do_plural(value: usize) -> String {
         if value > 1 {
             "s".into()
@@ -523,12 +536,19 @@ fn get_commit_diff_status_str(repo: &Repository, relver: &Version) -> String {
         }
     }
 
+    let source_str = if source.is_some() {
+        format!("{} is ", source.unwrap())
+    } else {
+        "".into()
+    };
+
     if ahead == 0 && behind == 0 {
-        return "up to date with HEAD".into();
+        return format!("{}up to date with {}", source_str, target);
     }
 
     format!(
-        "{}{}{}",
+        "{}{}{}{} {}",
+        source_str,
         if ahead > 0 {
             format!("{} commit{} ahead", ahead, do_plural(ahead))
         } else {
@@ -539,6 +559,72 @@ fn get_commit_diff_status_str(repo: &Repository, relver: &Version) -> String {
             format!("{} commit{} behind", behind, do_plural(behind))
         } else {
             "".into()
-        }
+        },
+        target,
     )
+}
+
+/// Obtain status string representing commit distance from 'relver' to its
+/// release branch's HEAD.
+///
+fn get_commit_diff_status_str(repo: &Repository, relver: &Version) -> String {
+    let (ahead, behind) = repo.diff_head(&relver, true).unwrap();
+    get_human_readable_diff(ahead, behind, None, &"HEAD".into())
+}
+
+/// Print per repository commit difference status, between latest available
+/// release for the provided version 'relver' and the HEAD of the release branch.
+///
+fn show_per_repo_diff(ws: &Workspace, relver: &Version) -> Result<(), ()> {
+    let repos = ws.repos.as_vec();
+
+    for repo in repos {
+        match show_repo_diff(&repo, &relver) {
+            Ok(()) => {}
+            Err(()) => {
+                errorln!("Unable to get repository '{}' commit diff", repo.name);
+            }
+        };
+    }
+    println!("");
+
+    Ok(())
+}
+
+/// Obtain the commit difference between a repository's release branch HEAD and
+/// its latest release tag.
+///
+fn show_repo_diff(repo: &Repository, relver: &Version) -> Result<(), ()> {
+    let releases = common::get_release_versions_from_repo(&repo, relver);
+    let latest_release = match releases.keys().max() {
+        Some(v) => releases.get(v).unwrap(),
+        None => {
+            errorln!(
+                "Release '{}' not found for repository '{}': possibly corrupted release!",
+                relver,
+                repo.name
+            );
+            return Err(());
+        }
+    };
+
+    let (ahead, behind) = match repo.diff_head(&latest_release, true) {
+        Ok(res) => res,
+        Err(err) => {
+            errorln!(
+                "Error obtaining commit diff for release '{}' in repository '{}': {}",
+                latest_release,
+                repo.name,
+                err
+            );
+            return Err(());
+        }
+    };
+
+    let release_str = latest_release.to_string();
+    let branch_str = latest_release.get_base_version_str();
+
+    let diff_str = get_human_readable_diff(ahead, behind, Some(&release_str), &branch_str);
+    println!("{:12}: {}", repo.name, diff_str);
+    Ok(())
 }

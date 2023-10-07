@@ -447,6 +447,19 @@ impl Repository {
         Ok(heads)
     }
 
+    /// Find a branch GitRef by its branch name. Returns RepositoryError if not
+    /// found or an error is encountered.
+    ///
+    pub fn find_head_ref(self: &Self, name: &String) -> RepositoryResult<crate::git::refs::GitRef> {
+        match self.get_heads_refs() {
+            Err(err) => Err(err),
+            Ok(v) => match v.iter().find(|e| e.name == name.as_ref()) {
+                None => Err(RepositoryError::UnknownBranchError),
+                Some(b) => Ok(b.clone()),
+            },
+        }
+    }
+
     /// Obtain all versions, from tags, known to this repository.
     ///
     pub fn get_versions(self: &Self) -> RepositoryResult<BTreeMap<u64, Version>> {
@@ -908,20 +921,10 @@ impl Repository {
         let head_name = self.version_to_str(&version.get_base_version(), false);
 
         // find head with name 'head_name'
-        let head_ref = match self.get_heads_refs() {
-            Ok(v) => match v.iter().find(|e| e.name == head_name) {
-                None => {
-                    errorln!("Unable to find release branch for '{}'", head_name);
-                    return Err(RepositoryError::UnknownBranchError);
-                }
-                Some(b) => b.clone(),
-            },
+        let head_ref = match self.find_head_ref(&head_name) {
+            Ok(r) => r,
             Err(err) => {
-                errorln!(
-                    "Unable to obtain branches for repository '{}': {}",
-                    self.name,
-                    err
-                );
+                errorln!("Unable to find release branch for '{}': {}", head_name, err);
                 return Err(err);
             }
         };
