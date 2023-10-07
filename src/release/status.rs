@@ -271,6 +271,8 @@ pub async fn status(ws: &Workspace, version: &Version, releases: &BTreeMap<u64, 
             return;
         }
     };
+
+    show_per_repo_sanity(&ws, &version);
 }
 
 /// Returns a prettified release workflow run status string for the specified
@@ -627,4 +629,67 @@ fn show_repo_diff(repo: &Repository, relver: &Version) -> Result<(), ()> {
     let diff_str = get_human_readable_diff(ahead, behind, Some(&release_str), &branch_str);
     println!("{:12}: {}", repo.name, diff_str);
     Ok(())
+}
+
+/// Check repositories sanity, compared against the 's3gw' repository. Mismatch
+/// of tags is considered as corruption.
+///
+fn show_per_repo_sanity(ws: &Workspace, relver: &Version) {
+    let all_repos = ws.repos.as_vec();
+    let repos: Vec<&&Repository> = all_repos
+        .iter()
+        .filter(|e| e.name != ws.repos.s3gw.name)
+        .collect();
+
+    let releases = common::get_release_versions_from_repo(&ws.repos.s3gw, &relver);
+    let latest_release = match releases.keys().max() {
+        None => None,
+        Some(v) => releases.get(v),
+    };
+
+    for repo in repos {
+        show_repo_sanity(&repo, &relver, &latest_release);
+    }
+}
+
+/// Check a single repository's sanity, checks whether its latest tag matches
+/// the expected release version.
+///
+fn show_repo_sanity(repo: &Repository, relver: &Version, expected_latest_ver: &Option<&Version>) {
+    let releases = common::get_release_versions_from_repo(&repo, &relver);
+    let latest_release = match releases.keys().max() {
+        Some(v) => releases.get(v).unwrap(),
+        None => {
+            if let Some(expected) = expected_latest_ver {
+                show_repo_corruption(&repo.name, &expected.to_string(), &"None".into());
+            } else {
+                println!("{:12}: valid", repo.name);
+            }
+            return;
+        }
+    };
+
+    if let Some(expected) = expected_latest_ver {
+        if expected.get_version_id() != latest_release.get_version_id() {
+            show_repo_corruption(
+                &repo.name,
+                &expected.to_string(),
+                &latest_release.to_string(),
+            );
+        } else {
+            println!("{:12}: valid", repo.name);
+        }
+    } else {
+        show_repo_corruption(&repo.name, &"None".into(), &latest_release.to_string());
+    }
+}
+
+/// Helper function. Simply output the same thing several times, and make sure
+/// it's always the same format.
+///
+fn show_repo_corruption(name: &String, expected: &String, got: &String) {
+    println!(
+        "{:12}: corrupted, expected '{}' found '{}'",
+        name, expected, got
+    );
 }
