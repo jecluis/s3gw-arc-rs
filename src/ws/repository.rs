@@ -563,7 +563,7 @@ impl Repository {
     /// Checks out the branch for the specified base version. Will fetch the
     /// branch if not already local. Will ensure branch is updated from remote
     /// branch.
-    pub fn checkout_branch(self: &Self, base_ver: &Version) -> RepositoryResult<()> {
+    pub fn checkout_version_branch(self: &Self, base_ver: &Version) -> RepositoryResult<()> {
         let heads = match self.get_heads_refs() {
             Ok(v) => v,
             Err(err) => {

@@ -35,7 +35,7 @@ pub fn sync(release: &Release, relver: &Version) -> Result<(), ()> {
 
         // checkout base version branch for the specified release version, for a
         // given repository.
-        match repo.checkout_branch(&base_ver) {
+        match repo.checkout_version_branch(&base_ver) {
             Ok(()) => {
                 log::debug!(
                     "sync for release, repo '{}' checked out base ver '{}'",
