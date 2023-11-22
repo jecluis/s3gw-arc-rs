@@ -127,13 +127,13 @@ impl Repository {
             if is_tag {
                 &self.config.tag_format
             } else {
-                &self.config.branch_format
+                &self.config.release_branch_format
             }
         );
         let ver_base_str = ver.to_str_fmt(if is_tag {
             &self.config.tag_format
         } else {
-            &self.config.branch_format
+            &self.config.release_branch_format
         });
         log::trace!(
             "version_to_str: base str '{}' ver '{}' is_tag {}",
@@ -211,10 +211,10 @@ impl Repository {
     pub fn get_releases(
         self: &Self,
     ) -> RepositoryResult<BTreeMap<u64, crate::version::BaseVersion>> {
-        let branch_re = regex::Regex::new(&self.config.branch_pattern).expect(
+        let branch_re = regex::Regex::new(&self.config.release_branch_pattern).expect(
             format!(
                 "potentially malformed branch pattern '{}'",
-                self.config.branch_pattern
+                self.config.release_branch_pattern
             )
             .as_str(),
         );
@@ -508,7 +508,7 @@ impl Repository {
         let branch_refs: Vec<&crate::git::refs::GitRef> =
             refs.values().filter(|e| e.is_branch()).collect();
 
-        match self.get_versions_from_refs(&branch_refs, &self.config.branch_pattern) {
+        match self.get_versions_from_refs(&branch_refs, &self.config.release_branch_pattern) {
             Ok(v) => Ok(v),
             Err(err) => {
                 log::error!(
@@ -532,7 +532,7 @@ impl Repository {
             }
         };
 
-        let dst_branch = dst.to_str_fmt(&self.config.branch_format);
+        let dst_branch = dst.to_str_fmt(&self.config.release_branch_format);
         match git.branch_from_default(&dst_branch) {
             Ok(()) => {
                 log::info!("Success branching from default to '{}'!", dst_branch);
@@ -626,7 +626,7 @@ impl Repository {
         relver: &Version,
         tagver: &Version,
     ) -> RepositoryResult<(String, String)> {
-        let branch_name = relver.to_str_fmt(&self.config.branch_format);
+        let branch_name = relver.to_str_fmt(&self.config.release_branch_format);
         let base_tag_name = tagver.to_str_fmt(&self.config.tag_format);
         let tag_name = if let Some(rc) = tagver.rc {
             format!("{}-rc{}", base_tag_name, rc)

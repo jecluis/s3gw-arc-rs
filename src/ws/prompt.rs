@@ -78,9 +78,11 @@ fn prompt_custom_git_repo_value(
         readonly: ro,
         readwrite: rw,
         tag_pattern: default.tag_pattern.clone(),
-        branch_pattern: default.branch_pattern.clone(),
+        release_branch_pattern: default.release_branch_pattern.clone(),
+        final_branch_pattern: default.final_branch_pattern.clone(),
         tag_format: default.tag_format.clone(),
-        branch_format: default.branch_format.clone(),
+        release_branch_format: default.release_branch_format.clone(),
+        final_branch_format: default.final_branch_format.clone(),
     }))
 }
 
@@ -120,9 +122,11 @@ fn prompt_custom_github_repo_value(
         readonly: format!("https://github.com/{}/{}", org, repo),
         readwrite: format!("git@github.com:{}/{}", org, repo),
         tag_pattern: default.tag_pattern.clone(),
-        branch_pattern: default.branch_pattern.clone(),
+        release_branch_pattern: default.release_branch_pattern.clone(),
+        final_branch_pattern: default.final_branch_pattern.clone(),
         tag_format: default.tag_format.clone(),
-        branch_format: default.branch_format.clone(),
+        release_branch_format: default.release_branch_format.clone(),
+        final_branch_format: default.final_branch_format.clone(),
     })
 }
 

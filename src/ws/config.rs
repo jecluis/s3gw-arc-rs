@@ -30,9 +30,11 @@ pub struct WSGitRepoConfigValues {
     pub readonly: String,
     pub readwrite: String,
     pub tag_pattern: String,
-    pub branch_pattern: String,
+    pub release_branch_pattern: String,
+    pub final_branch_pattern: Option<String>,
     pub tag_format: String,
-    pub branch_format: String,
+    pub release_branch_format: String,
+    pub final_branch_format: Option<String>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
@@ -88,9 +90,11 @@ impl Default for WSConfig {
                     readonly: String::from("https://github.com/aquarist-labs/s3gw.git"),
                     readwrite: String::from("git@github.com:aquarist-labs/s3gw.git"),
                     tag_pattern: String::from(r"^v(\d+\.\d+\.\d+.*)$"),
-                    branch_pattern: String::from(r"^s3gw-v(\d+\.\d+)$"),
+                    release_branch_pattern: String::from(r"^s3gw-v(\d+\.\d+)$"),
+                    final_branch_pattern: None,
                     tag_format: String::from("v{{major}}.{{minor}}.{{patch}}"),
-                    branch_format: String::from("s3gw-v{{major}}.{{minor}}"),
+                    release_branch_format: String::from("s3gw-v{{major}}.{{minor}}"),
+                    final_branch_format: None,
                 },
                 ceph: WSGitRepoConfigValues {
                     github: Some(WSGitHubConfig {
@@ -100,9 +104,11 @@ impl Default for WSConfig {
                     readonly: String::from("https://github.com/aquarist-labs/ceph.git"),
                     readwrite: String::from("git@github.com:aquarist-labs/ceph.git"),
                     tag_pattern: String::from(r"^s3gw-v(\d+\.\d+\.\d+.*)$"),
-                    branch_pattern: String::from(r"^s3gw-v(\d+\.\d+)$"),
+                    release_branch_pattern: String::from(r"^s3gw-v(\d+\.\d+)$"),
+                    final_branch_pattern: None,
                     tag_format: String::from("s3gw-v{{major}}.{{minor}}.{{patch}}"),
-                    branch_format: String::from("s3gw-v{{major}}.{{minor}}"),
+                    release_branch_format: String::from("s3gw-v{{major}}.{{minor}}"),
+                    final_branch_format: None,
                 },
                 ui: WSGitRepoConfigValues {
                     github: Some(WSGitHubConfig {
@@ -112,9 +118,11 @@ impl Default for WSConfig {
                     readonly: String::from("https://github.com/aquarist-labs/s3gw-ui.git"),
                     readwrite: String::from("git@github.com:aquarist-labs/s3gw-ui.git"),
                     tag_pattern: String::from(r"^s3gw-v(\d+\.\d+\.\d+.*)$"),
-                    branch_pattern: String::from(r"^s3gw-v(\d+\.\d+)$"),
+                    release_branch_pattern: String::from(r"^s3gw-v(\d+\.\d+)$"),
+                    final_branch_format: None,
                     tag_format: String::from("s3gw-v{{major}}.{{minor}}.{{patch}}"),
-                    branch_format: String::from("s3gw-v{{major}}.{{minor}}"),
+                    release_branch_format: String::from("s3gw-v{{major}}.{{minor}}"),
+                    final_branch_pattern: None,
                 },
                 charts: WSGitRepoConfigValues {
                     github: Some(WSGitHubConfig {
@@ -124,9 +132,11 @@ impl Default for WSConfig {
                     readonly: String::from("https://github.com/aquarist-labs/s3gw-charts.git"),
                     readwrite: String::from("git@github.com:aquarist-labs/s3gw-charts.git"),
                     tag_pattern: String::from(r"^s3gw-v(\d+\.\d+\.\d+.*)$"),
-                    branch_pattern: String::from(r"^v(\d+\.\d+)$"),
+                    release_branch_pattern: String::from(r"^s3gw-v(\d+\.\d+)$"),
+                    final_branch_pattern: Some(String::from(r"^v(\d+\.\d+)$")),
                     tag_format: String::from("s3gw-v{{major}}.{{minor}}.{{patch}}"),
-                    branch_format: String::from("v{{major}}.{{minor}}"),
+                    release_branch_format: String::from("s3gw-v{{major}}.{{minor}}"),
+                    final_branch_format: Some(String::from("v{{major}}.{{minor}}")),
                 },
             },
             registry: Some(WSQuayRegistryConfig {
