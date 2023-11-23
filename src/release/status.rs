@@ -171,17 +171,28 @@ impl ReleaseWorkflowResult {
                 "queued" => ReleaseWorkflowStatus::QUEUED,
                 "completed" => ReleaseWorkflowStatus::COMPLETED,
                 "in_progress" => ReleaseWorkflowStatus::INPROGRESS,
-                _ => ReleaseWorkflowStatus::UNKNOWN,
+                _ => {
+                    log::trace!("unknown release workflow status: {}", v);
+                    ReleaseWorkflowStatus::UNKNOWN
+                }
             },
         };
 
         let success = match &res.conclusion {
-            None => false,
+            None => {
+                log::trace!("no conclusion found!");
+                false
+            }
             Some(v) => match v.as_str() {
                 "success" => true,
-                _ => false,
+                _ => {
+                    log::trace!("conclusing not success: {}", v);
+                    false
+                }
             },
         };
+
+        log::trace!("release workflow status: {}, success: {}", status, success);
 
         let tag = match &res.head_branch {
             Some(v) => v.clone(),
@@ -212,7 +223,7 @@ impl ReleaseWorkflowResult {
         if self.is_waiting() {
             return false;
         }
-        self.success
+        !self.success
     }
 }
 
