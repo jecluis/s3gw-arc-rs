@@ -18,6 +18,8 @@ use std::io::BufWriter;
 use std::io::Write;
 use std::path::PathBuf;
 
+use crate::errorln;
+use crate::infoln;
 use crate::release::errors::ChartsResult;
 use crate::{boomln, version::Version, ws::repository::Repository};
 
@@ -144,6 +146,65 @@ fn chart_update_version(chart_path: &PathBuf, version: &Version) -> ChartsResult
     if let Err(err) = std::fs::rename(&tmp_chart_path, &chart_path) {
         boomln!("Error renaming tmp charts file: {}", err);
         return Err(ChartsError::UnknownError);
+    }
+
+    Ok(())
+}
+
+/// Finalizing the charts release means two things:
+/// 1. Pushing the contents of the release branch we have been using to the
+///    final branch associated with the repository, which will trigger the
+///    charts publishing workflow.
+/// 2. Updating the chart version on the repository's main brain.
+///
+/// In the context of 2., we will not actually be pushing to the main branch
+/// directly, because we have no way of knowing whether other things need to be
+/// merged into main before the chart version is updated. Instead, we will open
+/// a pull request targeting main.
+///
+pub fn finalize_charts_release(repo: &Repository, version: &Version) -> ChartsResult<()> {
+    // publish the chart version we're finalizing
+    if let Err(err) = publish_chart(&repo, &version) {
+        return Err(err);
+    }
+
+    // finalize 'main' release, by updating the chart version and opening a pull
+    // request against main.
+    infoln!("To finish the Helm Chart release, please do the following:");
+    infoln!("  1. cherry-pick the topmost commit to a new branch");
+    infoln!("  2. open a Pull Request against the 'main' branch.");
+    infoln!("  3. Ask for a reviewer, and merge the Pull Request.");
+
+    Ok(())
+}
+
+/// Publishes the chart's current version by pushing the release branch to the
+/// chart's final release branch -- i.e., the branch that triggers the
+/// publishing workflow.
+///
+fn publish_chart(repo: &Repository, version: &Version) -> ChartsResult<()> {
+    let dst_branch = match &repo.config.final_branch_format {
+        None => {
+            errorln!(
+                "Repository '{}' final branch format not defined!",
+                repo.name
+            );
+            return Err(ChartsError::MissingFinalBranch);
+        }
+        Some(v) => version.to_str_fmt(v),
+    };
+    let src_branch = version.to_str_fmt(&repo.config.release_branch_format);
+
+    let refspec = format!("refs/heads/{}:refs/heads/{}", src_branch, dst_branch);
+    if let Err(err) = repo.push(&refspec) {
+        errorln!(
+            "Error pushing '{}' to '{}' (refspec '{}'): {}",
+            src_branch,
+            dst_branch,
+            refspec,
+            err
+        );
+        return Err(ChartsError::PublishError);
     }
 
     Ok(())

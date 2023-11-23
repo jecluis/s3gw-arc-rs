@@ -68,6 +68,8 @@ pub enum ChartsError {
     ParsingError,
     StagingError,
     CommitError,
+    MissingFinalBranch,
+    PublishError,
 
     UnknownError,
 }
@@ -79,6 +81,8 @@ impl Display for ChartsError {
             ChartsError::ParsingError => "error parsing chart file",
             ChartsError::StagingError => "error staging chart file for commit",
             ChartsError::CommitError => "error committing chart file",
+            ChartsError::MissingFinalBranch => "final branch not defined for repository",
+            ChartsError::PublishError => "error publishing chart",
             ChartsError::UnknownError => "unknown error",
         })
     }

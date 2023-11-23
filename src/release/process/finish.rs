@@ -80,6 +80,19 @@ pub fn finish(release: &mut Release, version: &Version) -> ReleaseResult<()> {
         }
     };
 
+    // push final chart branch
+    //  This is a workaround that avoids releasing the chart until we
+    //  effectively are ready to finish the release. So far we have been pushing
+    //  to a "temporary" branch for the current release, but now we need to have
+    //  a specific branch name in the charts repository so the release workflow
+    //  can be triggered.
+
+    infoln!("Finalizing Helm Chart release");
+    if let Err(err) = charts::finalize_charts_release(&ws.repos.charts, &version) {
+        errorln!("Unable to finalize chart for publishing: {}", err);
+        return Err(ReleaseError::UnknownError);
+    }
+
     successln!("Version {} released!", version);
 
     Ok(())
