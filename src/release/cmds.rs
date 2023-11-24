@@ -27,8 +27,6 @@ pub enum CmdVersionError {
 
 #[derive(clap::Subcommand)]
 pub enum Cmds {
-    /// Obtain release information.
-    Info,
     /// List releases.
     List,
     /// Release status.
@@ -133,9 +131,6 @@ pub async fn handle_cmds(cmd: &Cmds) {
     };
 
     match cmd {
-        Cmds::Info => {
-            infoln!("Obtain workspace release info");
-        }
         Cmds::Status(status_cmd) => {
             log::debug!("Obtain release status");
             let version = match check_version_against_state(&release.state, &status_cmd.version) {
