@@ -39,6 +39,9 @@ pub enum Cmds {
     Continue(ContinueCommand),
     /// Finish the release process.
     Finish(FinishCommand),
+
+    /// Generate release announcement.
+    Announce(AnnounceCommand),
 }
 
 #[derive(clap::Args)]
@@ -79,6 +82,16 @@ pub struct FinishCommand {
     /// Release version to finish (e.g., v0.17.1)
     #[arg(value_name = "VERSION", short, long)]
     version: Option<String>,
+}
+
+#[derive(clap::Args)]
+pub struct AnnounceCommand {
+    /// Release version to announce (e.g., v0.17.1)
+    #[arg(value_name = "VERSION", short, long)]
+    version: String,
+
+    #[arg(value_name = "FILE", short, long)]
+    outfile: Option<PathBuf>,
 }
 
 pub async fn handle_cmds(cmd: &Cmds) {
@@ -236,6 +249,30 @@ pub async fn handle_cmds(cmd: &Cmds) {
                     boomln!("Error finishing release: {}", err);
                 }
             };
+        }
+        Cmds::Announce(announce_cmd) => {
+            let relver = match Version::from_str(&announce_cmd.version) {
+                Err(()) => {
+                    boomln!(
+                        "Unable to parse provided version '{}'",
+                        announce_cmd.version
+                    );
+                    return;
+                }
+                Ok(v) => v,
+            };
+
+            match crate::release::process::announce::announce(
+                &mut release,
+                &relver,
+                &announce_cmd.outfile,
+            ) {
+                Ok(()) => {}
+                Err(err) => {
+                    boomln!("Error announcing release '{}': {}", relver, err);
+                    return;
+                }
+            }
         }
         Cmds::List => {
             boomln!("Should not have reached here!");
