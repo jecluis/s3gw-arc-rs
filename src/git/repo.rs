@@ -473,11 +473,11 @@ impl GitRepo {
     /// Fetch a given refspec, branching the resulting FETCH_HEAD into a branch
     /// with the provided 'dst_branch_name' name.
     ///
-    pub fn fetch(self: &Self, refspec: &String, dst_branch_name: &String) -> Result<(), ()> {
+    pub fn fetch(self: &Self, refspec: &String) -> Result<(), ()> {
         let mut remote = match self.get_remote("ro") {
             Ok(r) => r,
             Err(()) => {
-                log::error!("Error obtaining 'rw' remote to fetch refspec '{}'", refspec);
+                log::error!("Error obtaining 'ro' remote to fetch refspec '{}'", refspec);
                 return Err(());
             }
         };
@@ -490,6 +490,31 @@ impl GitRepo {
                 return Err(());
             }
         };
+
+        Ok(())
+    }
+
+    pub fn fetch_to(self: &Self, refspec: &String, dst_branch_name: &String) -> Result<(), ()> {
+        if refspec.contains(":") {
+            log::error!(
+                "Wrongly formatted refspec '{}': destination not expected!",
+                refspec
+            );
+            return Err(());
+        }
+        match self.fetch(&refspec) {
+            Ok(()) => {}
+            Err(()) => {
+                log::error!(
+                    "Error fetching '{}': unable to create branch for '{}'",
+                    refspec,
+                    dst_branch_name
+                );
+                return Err(());
+            }
+        };
+
+        // create branch from FETCH_HEAD
 
         let fetch_head = self.repo.find_reference("FETCH_HEAD").unwrap();
         let commit = self

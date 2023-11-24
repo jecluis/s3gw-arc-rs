@@ -31,6 +31,8 @@ pub enum Cmds {
     List,
     /// Release status.
     Status(StatusCommand),
+    /// Sync release state.
+    Sync(SyncCommand),
     /// Start a new release process.
     Start(StartCommand),
     /// Continue the release process.
@@ -47,6 +49,13 @@ pub struct StatusCommand {
     /// Version for which to obtain status
     #[arg(value_name = "VERSION", short, long)]
     version: Option<String>,
+}
+
+#[derive(clap::Args)]
+pub struct SyncCommand {
+    /// Version for which to sync the release
+    #[arg(value_name = "VERSION", short, long)]
+    version: String,
 }
 
 #[derive(clap::Args)]
@@ -145,6 +154,30 @@ pub async fn handle_cmds(cmd: &Cmds) {
                 }
             };
             release.status(&version).await;
+        }
+        Cmds::Sync(sync_cmd) => {
+            log::debug!("Synchronize release state");
+            let version = match Version::from_str(&sync_cmd.version) {
+                Ok(v) => v,
+                Err(()) => {
+                    errorln!("Error parsing provided version!");
+                    return;
+                }
+            };
+            match crate::release::sync::sync(&release, &version) {
+                Ok(()) => {
+                    successln!(
+                        "Successfully synchronized release state for version '{}'",
+                        version
+                    );
+                }
+                Err(()) => {
+                    errorln!(
+                        "Error synchronizing release state for version '{}'",
+                        version
+                    );
+                }
+            }
         }
         Cmds::Start(start_cmd) => {
             infoln!(

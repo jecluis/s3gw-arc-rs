@@ -79,7 +79,7 @@ impl Workspace {
                 entry.name,
                 entry.update_submodules
             );
-            match entry.sync(entry.update_submodules) {
+            match entry.update(entry.update_submodules) {
                 Ok(()) => {}
                 Err(err) => {
                     log::error!("error synchronizing repository '{}': {}", entry.name, err);

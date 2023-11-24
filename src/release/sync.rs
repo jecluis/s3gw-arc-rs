@@ -33,6 +33,18 @@ pub fn sync(release: &Release, relver: &Version) -> Result<(), ()> {
             base_ver
         );
 
+        // synchronize the repository's state with its upstream, including
+        // submodules if needed.
+        match repo.update(repo.update_submodules) {
+            Ok(()) => {
+                log::debug!("sync for release, repo '{}' sync'ed", repo.name);
+            }
+            Err(err) => {
+                errorln!("Unable to synchronize repository '{}': {}", repo.name, err);
+                return Err(());
+            }
+        };
+
         // checkout base version branch for the specified release version, for a
         // given repository.
         match repo.checkout_version_branch(&base_ver) {
@@ -50,18 +62,6 @@ pub fn sync(release: &Release, relver: &Version) -> Result<(), ()> {
                     repo.name,
                     err
                 );
-                return Err(());
-            }
-        };
-
-        // synchronize the repository's state with its upstream, including
-        // submodules if needed.
-        match repo.sync(repo.update_submodules) {
-            Ok(()) => {
-                log::debug!("sync for release, repo '{}' sync'ed", repo.name);
-            }
-            Err(err) => {
-                errorln!("Unable to synchronize repository '{}': {}", repo.name, err);
                 return Err(());
             }
         };

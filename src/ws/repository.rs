@@ -152,7 +152,7 @@ impl Repository {
     /// Synchronize local repository with its upstream. If the repository does
     /// not exist yet, it will be cloned.
     ///
-    pub fn sync(self: &Self, sync_submodules: bool) -> RepositoryResult<()> {
+    pub fn update(self: &Self, sync_submodules: bool) -> RepositoryResult<()> {
         if !self.path.exists() {
             // clone repository
             let git = match git::repo::GitRepo::clone(
@@ -587,9 +587,11 @@ impl Repository {
             }
         };
 
+        let branch_refspec = format!("refs/heads/{}", branch_str);
+
         if !ref_entry.has_local {
             // must fetch branch prior to checkout
-            match git.fetch(&format!("refs/heads/{}", branch_str), &branch_str) {
+            match git.fetch_to(&branch_refspec, &branch_str) {
                 Ok(()) => {
                     successln!("Successfully fetched '{}'", branch_str);
                 }
@@ -599,6 +601,18 @@ impl Repository {
                 }
             };
         }
+
+        // update branch from remote
+        match git.fetch(&format!("{}:{}", branch_refspec, branch_refspec)) {
+            Ok(()) => {
+                successln!("Successfully updated branch '{}'", branch_str);
+            }
+            Err(()) => {
+                errorln!("Error updating branch '{}'", branch_str);
+                return Err(RepositoryError::FetchingError);
+            }
+        }
+
         // checkout branch
         match git.checkout_branch(&branch_str) {
             Ok(()) => {
@@ -932,7 +946,7 @@ impl Repository {
 
         // if branch is not locally found, fetch it first.
         if head_ref.has_remote && !head_ref.has_local {
-            match git.fetch(&head_refspec, &head_name) {
+            match git.fetch_to(&head_refspec, &head_name) {
                 Ok(()) => {
                     log::debug!("fetched '{}' to '{}", head_refspec, head_name);
                 }
