@@ -247,7 +247,7 @@ fn maybe_cut_branches<'a>(
 fn cut_branches_for(version: &Version, repos: &Vec<&Repository>) -> ReleaseResult<()> {
     for repo in repos {
         log::info!("cut branch for repository {}", repo.name);
-        match repo.branch_from_default(&version) {
+        match repo.branch_version_from_default(&version) {
             Ok(()) => {
                 log::info!("branched off!");
             }

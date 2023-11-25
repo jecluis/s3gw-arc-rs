@@ -494,9 +494,16 @@ impl Repository {
         }
     }
 
+    /// Create a new branch for version 'ver' from this repository's default branch.
+    ///
+    pub fn branch_version_from_default(self: &Self, ver: &Version) -> RepositoryResult<()> {
+        let dst_branch = ver.to_str_fmt(&self.config.release_branch_format);
+        self.branch_from_default(&dst_branch)
+    }
+
     /// Create a new branch 'dst' from this repository's default branch.
     ///
-    pub fn branch_from_default(self: &Self, dst: &Version) -> RepositoryResult<()> {
+    pub fn branch_from_default(self: &Self, dst: &String) -> RepositoryResult<()> {
         let git = match git::repo::GitRepo::open(&self.path) {
             Ok(v) => v,
             Err(()) => {
@@ -504,28 +511,23 @@ impl Repository {
                 return Err(RepositoryError::UnableToOpenRepositoryError);
             }
         };
-
-        let dst_branch = dst.to_str_fmt(&self.config.release_branch_format);
-        match git.branch_from_default(&dst_branch) {
+        assert!(!dst.is_empty());
+        match git.branch_from_default(&dst) {
             Ok(()) => {
-                log::info!("Success branching from default to '{}'!", dst_branch);
+                log::info!("Success branching from default to '{}'!", dst);
             }
             Err(()) => {
-                log::error!("Error branching from default to '{}'!", dst_branch);
+                log::error!("Error branching from default to '{}'!", dst);
                 return Err(RepositoryError::BranchingError);
             }
         }
 
-        match git.checkout_branch(&dst_branch) {
+        match git.checkout_branch(&dst) {
             Ok(()) => {
-                log::info!("Checked out '{}' on repository '{}'", dst_branch, self.name);
+                log::info!("Checked out '{}' on repository '{}'", dst, self.name);
             }
             Err(()) => {
-                log::error!(
-                    "Unable to checkout '{}' on repository '{}'",
-                    dst_branch,
-                    self.name
-                );
+                log::error!("Unable to checkout '{}' on repository '{}'", dst, self.name);
                 return Err(RepositoryError::CheckoutError);
             }
         };
