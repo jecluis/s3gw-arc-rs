@@ -369,7 +369,9 @@ impl GitRepo {
         Ok(refs)
     }
 
-    /// Create a branch from this repository's default branch.
+    /// Create a branch from this repository's default branch. The default
+    /// branch is whatever is pointed to by the repository's
+    /// 'refs/remotes/ro/HEAD' at the time.
     ///
     pub fn branch_from_default(self: &Self, dst: &String) -> Result<(), ()> {
         let head_ref = self.repo.find_reference("refs/remotes/ro/HEAD").unwrap();
@@ -470,8 +472,9 @@ impl GitRepo {
         Ok(())
     }
 
-    /// Fetch a given refspec, branching the resulting FETCH_HEAD into a branch
-    /// with the provided 'dst_branch_name' name.
+    /// Fetch given refspec. This can be used to update a branch, by providing a
+    /// refspec of type 'refs/heads/foo:refs/heads/foo', which is somewhat
+    /// equivalent to a 'git pull'.
     ///
     pub fn fetch(self: &Self, refspec: &String) -> Result<(), ()> {
         let mut remote = match self.get_remote("ro") {
@@ -494,6 +497,9 @@ impl GitRepo {
         Ok(())
     }
 
+    /// Fetch a given refspec, branching the resulting FETCH_HEAD into a branch
+    /// with the provided 'dst_branch_name' name.
+    ///
     pub fn fetch_to(self: &Self, refspec: &String, dst_branch_name: &String) -> Result<(), ()> {
         if refspec.contains(":") {
             log::error!(
