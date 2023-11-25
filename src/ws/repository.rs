@@ -332,33 +332,6 @@ impl Repository {
         Ok(version_tree)
     }
 
-    pub fn _print_version_tree(self: &Self) {
-        let tree = match self.get_releases() {
-            Ok(t) => t,
-            Err(err) => {
-                log::error!("Unable to print version tree for '{}': {}", self.name, err);
-                return;
-            }
-        };
-
-        for base_version in tree.values() {
-            println!("v{}", base_version.version);
-            for release_desc in base_version.releases.values() {
-                println!(
-                    "  - v{} ({})",
-                    release_desc.release,
-                    match release_desc.is_complete {
-                        true => "complete",
-                        false => "incomplete",
-                    }
-                );
-                for version in release_desc.versions.values() {
-                    println!("    - v{}", version);
-                }
-            }
-        }
-    }
-
     /// Obtain all versions from the provided vector of references, putting
     /// each reference through a regular expression for parsing to obtain the version.
     ///
