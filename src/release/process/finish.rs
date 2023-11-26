@@ -246,7 +246,7 @@ async fn finish_s3gw_update_default(
     }
 
     let commit_msg = format!("Release v{}", relver);
-    if let Err(err) = repo.commit(&commit_msg) {
+    if let Err(err) = repo.commit(&commit_msg, false) {
         log::error!(
             "Error committing release commit for {} on branch {}: {}",
             relver,

@@ -56,8 +56,9 @@ pub fn update_submodule(
     ws: &Workspace,
     info: &SubmoduleInfo,
     tagver: &Version,
-) -> Result<PathBuf, ()> {
+) -> Result<Option<PathBuf>, ()> {
     let tagver_str = tagver.to_rc_str_fmt(&info.repo.config.tag_format);
+    log::trace!("update submodule '{}' to tag '{}'", info.name, tagver_str);
 
     match ws
         .repos
@@ -65,7 +66,12 @@ pub fn update_submodule(
         .set_submodule_head(&info.name, &tagver_str, true)
     {
         Ok(p) => {
-            log::debug!("Updated submodule '{}' head to '{}'", info.name, tagver_str);
+            match p {
+                Some(_) => {
+                    log::debug!("Updated submodule '{}' head to '{}'", info.name, tagver_str)
+                }
+                None => log::debug!("Submodule '{}' not changed", info.name),
+            };
             Ok(p)
         }
         Err(err) => {
@@ -88,8 +94,10 @@ pub fn update_submodules(ws: &Workspace, tagver: &Version) -> Result<Vec<PathBuf
 
     for entry in &submodules {
         match update_submodule(&ws, &entry, &tagver) {
-            Ok(p) => {
-                res_vec.push(p);
+            Ok(r) => {
+                if let Some(p) = r {
+                    res_vec.push(p);
+                }
             }
             Err(()) => {
                 log::error!("Error updating submodule '{}' to '{}'", entry.name, tagver);

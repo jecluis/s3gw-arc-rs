@@ -428,24 +428,35 @@ pub fn perform_release(
         paths_to_add.push(latest_path);
     }
 
-    match ws.repos.s3gw.stage_paths(&paths_to_add) {
-        Ok(()) => {
-            log::debug!(
-                "Staged paths:\n{}",
-                paths_to_add
-                    .iter()
-                    .map(|e| e.display().to_string())
-                    .collect::<Vec<String>>()
-                    .join("\n")
-            );
-        }
-        Err(err) => {
-            log::error!("Error staging paths: {}", err);
-            return Err(ReleaseError::StagingError);
-        }
-    };
+    let mut force_empty_commit = false;
 
-    match ws.repos.s3gw.commit_release(&relver, &next_ver) {
+    if paths_to_add.len() > 0 {
+        match ws.repos.s3gw.stage_paths(&paths_to_add) {
+            Ok(()) => {
+                log::debug!(
+                    "Staged paths:\n{}",
+                    paths_to_add
+                        .iter()
+                        .map(|e| e.display().to_string())
+                        .collect::<Vec<String>>()
+                        .join("\n")
+                );
+            }
+            Err(err) => {
+                log::error!("Error staging paths: {}", err);
+                return Err(ReleaseError::StagingError);
+            }
+        };
+    } else {
+        warnln!("No changes on repositories, continuing anyway.");
+        force_empty_commit = true;
+    }
+
+    match ws
+        .repos
+        .s3gw
+        .commit_release(&relver, &next_ver, force_empty_commit)
+    {
         Ok(()) => {
             log::debug!("Committed release '{}' tag '{}'", relver, next_ver);
         }

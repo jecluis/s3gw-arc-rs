@@ -559,7 +559,11 @@ impl GitRepo {
 
     /// Set a given submodule 'name's HEAD to the provided 'refname'.
     ///
-    pub fn set_submodule_head(self: &Self, name: &String, refname: &String) -> Result<PathBuf, ()> {
+    pub fn set_submodule_head(
+        self: &Self,
+        name: &String,
+        refname: &String,
+    ) -> Result<Option<PathBuf>, ()> {
         let submodule = match self.repo.find_submodule(&name) {
             Ok(s) => s,
             Err(err) => {
@@ -599,6 +603,61 @@ impl GitRepo {
         };
 
         let git = repo.get_git_repo();
+        let cur_head = match git.head() {
+            Ok(r) => r,
+            Err(err) => {
+                log::error!("Unable to obtain repository's head reference: {}", err);
+                return Err(());
+            }
+        };
+
+        // make sure we actually have something to update to. If not, just
+        // return None to let the caller know there are no paths to be updated.
+
+        let head_oid = match cur_head.target() {
+            None => {
+                log::error!("Unable to obtain current HEAD's target oid");
+                return Err(());
+            }
+            Some(oid) => {
+                log::trace!("Current HEAD's target oid: {}", oid);
+                oid
+            }
+        };
+
+        let new_head_oid = match git.find_reference(&refname) {
+            Ok(r) => match r.peel_to_commit() {
+                Err(err) => {
+                    log::error!("Unable to peel reference to commit: {}", err);
+                    return Err(());
+                }
+                Ok(c) => {
+                    log::trace!("Peeled refname '{}' to oid '{}'", refname, c.id());
+                    c.id()
+                }
+            },
+            Err(err) => {
+                log::error!(
+                    "Unable to find reference for refname '{}': {}",
+                    refname,
+                    err
+                );
+                return Err(());
+            }
+        };
+
+        log::trace!(
+            "head commit oid: {}, new head oid: {}",
+            head_oid,
+            new_head_oid
+        );
+
+        // nothing to update to, return None to let the caller know.
+        if head_oid == new_head_oid {
+            log::debug!("head commit {} same as refname '{}'", head_oid, refname);
+            return Ok(None);
+        }
+
         match git.set_head(&refname) {
             Ok(()) => {
                 log::debug!("Set submodule's head to '{}'", refname);
@@ -621,7 +680,7 @@ impl GitRepo {
             }
         };
 
-        Ok(submodule_path.to_path_buf())
+        Ok(Some(submodule_path.to_path_buf()))
     }
 
     /// Stage the paths provided in a vector 'paths', by adding them to the

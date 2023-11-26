@@ -781,7 +781,7 @@ impl Repository {
         name: &String,
         name_spec: &String,
         is_tag: bool,
-    ) -> RepositoryResult<PathBuf> {
+    ) -> RepositoryResult<Option<PathBuf>> {
         let git = match git::repo::GitRepo::open(&self.path) {
             Ok(r) => r,
             Err(()) => {
@@ -801,17 +801,23 @@ impl Repository {
             name_spec
         );
         let path = match git.set_submodule_head(&name, &refname) {
-            Ok(p) => {
-                log::debug!("Success setting submodule '{}' head to '{}'", name, refname);
-                p
-            }
+            Ok(r) => match r {
+                Some(p) => {
+                    log::debug!("Success setting submodule '{}' head to '{}'", name, refname);
+                    p
+                }
+                None => {
+                    log::debug!("Submodule '{}' head not changed!", name);
+                    return Ok(None);
+                }
+            },
             Err(()) => {
                 log::error!("Error setting submodule '{}' head to '{}'", name, refname);
                 return Err(RepositoryError::SubmoduleHeadUpdateError);
             }
         };
 
-        Ok(path)
+        Ok(Some(path))
     }
 
     /// Add paths in provided vector to this repository's index, for subsequent commit.
@@ -844,19 +850,20 @@ impl Repository {
         Ok(())
     }
 
-    pub fn commit(self: &Self, commit_msg: &String) -> RepositoryResult<()> {
-        match std::process::Command::new("git")
-            .args([
-                "-C",
-                self.path.to_str().unwrap(),
-                "commit",
-                "--gpg-sign",
-                "--signoff",
-                "-m",
-                commit_msg.as_str(),
-            ])
-            .status()
-        {
+    pub fn commit(self: &Self, commit_msg: &String, force_empty: bool) -> RepositoryResult<()> {
+        let mut args = vec![
+            "-C",
+            self.path.to_str().unwrap(),
+            "commit",
+            "--gpg-sign",
+            "--signoff",
+            "-m",
+            commit_msg.as_str(),
+        ];
+        if force_empty {
+            args.push("--allow-empty");
+        }
+        match std::process::Command::new("git").args(&args).status() {
             Ok(res) => {
                 if !res.success() {
                     log::error!("Unable to commit: {}", res.code().unwrap());
@@ -873,7 +880,12 @@ impl Repository {
 
     /// Commit a given release version, tagging it with the appropriate version.
     ///
-    pub fn commit_release(self: &Self, relver: &Version, tagver: &Version) -> RepositoryResult<()> {
+    pub fn commit_release(
+        self: &Self,
+        relver: &Version,
+        tagver: &Version,
+        force_empty: bool,
+    ) -> RepositoryResult<()> {
         let relver_str = format!("v{}", relver);
         let commit_msg = if let Some(rc) = &tagver.rc {
             format!("release candidate {} for {}", rc, relver_str)
@@ -882,7 +894,7 @@ impl Repository {
         };
 
         log::debug!("Committing release ver '{}' tag '{}'", relver, tagver);
-        if let Err(err) = self.commit(&commit_msg) {
+        if let Err(err) = self.commit(&commit_msg, force_empty) {
             log::error!("Unable to commit '{}': {}", tagver, err);
             return Err(err);
         }
