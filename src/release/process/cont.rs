@@ -17,11 +17,9 @@ use std::path::PathBuf;
 use crate::boomln;
 use crate::release::errors::ReleaseResult;
 use crate::release::process::start;
-use crate::release::status;
 use crate::release::sync;
 use crate::release::Release;
 use crate::successln;
-use crate::warnln;
 use crate::{errorln, infoln, release::errors::ReleaseError, version::Version};
 
 pub async fn continue_release(
@@ -30,23 +28,11 @@ pub async fn continue_release(
     notes: &Option<PathBuf>,
     force: bool,
 ) -> ReleaseResult<()> {
-    // 1. check whether release has been finished
-    // 2. check whether release has been started
-    // 3. sync repositories for the specified release
-    // 3. check whether last release candidate has finished building
-    // 5. start a new release candidate
+    // Continuing a release requires to first synchronize the repositories, then
+    // ensuring we can actually release. If so, we can start a new release
+    // candidate.
 
     let ws = &release.ws;
-
-    let release_versions = crate::release::common::get_release_versions(&ws, &version);
-    if release_versions.contains_key(&version.get_version_id()) {
-        errorln!("Release version {} already exists", version);
-        return Err(ReleaseError::ReleaseExistsError);
-    } else if release_versions.len() == 0 {
-        errorln!("Release has not been started yet.");
-        return Err(ReleaseError::NotStartedError);
-    }
-
     infoln!("Continuing release {}", version);
 
     match sync::sync(&release, &version) {
@@ -57,54 +43,10 @@ pub async fn continue_release(
         }
     };
 
-    let last_rc = match release_versions.last_key_value() {
-        None => {
-            boomln!("Unable to find last release candidate!");
-            panic!("This should not happen!");
-        }
-        Some((_, v)) => v,
-    };
-
-    let release_status = match status::get_release_status(&ws, &last_rc).await {
-        Ok(v) => v,
-        Err(()) => {
-            boomln!("Unable to obtain latest release status!");
-            return Err(ReleaseError::UnknownError);
-        }
-    };
-    match release_status {
-        None => {
-            errorln!(
-                "Previous release candidate {} has not been released yet.",
-                last_rc
-            );
-            if force {
-                infoln!("Continuing regardless because '--force' was specified.");
-            } else {
-                infoln!("Specify '--force' if you want to continue nonetheless.");
-                return Err(ReleaseError::ReleaseBuildNotFoundError);
-            }
-        }
-        Some(s) => {
-            if s.is_waiting() {
-                warnln!("Previous candidate {} still being released!", last_rc);
-                if force {
-                    warnln!("Continuing regardless because '--force' was specified.");
-                } else {
-                    infoln!("Specifify '--force' if you want to continue regardless.");
-                    return Err(ReleaseError::ReleaseBuildOnGoingError);
-                }
-            } else if s.is_failed() {
-                errorln!("Previous candidate {} failed releasing!", last_rc);
-                if force {
-                    warnln!("Continuing regardless because '--force' was specified.");
-                } else {
-                    infoln!("Specify '--force' if you want to continue nonetheless.");
-                    return Err(ReleaseError::ReleaseBuildFailedError);
-                }
-            }
-        }
-    };
+    if let Err(err) = super::validate::check_can_release(&ws, &version, force).await {
+        boomln!("Can't continue releasing due to validation error: {}", err);
+        return Err(err);
+    }
 
     match start::start_release_candidate(&ws, &version, notes.as_ref()) {
         Ok(v) => {
