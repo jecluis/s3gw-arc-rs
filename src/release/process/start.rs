@@ -16,6 +16,7 @@ use std::path::PathBuf;
 
 use crate::release::common::{get_release_versions, get_release_versions_from_repo};
 use crate::release::errors::ReleaseResult;
+use crate::release::process::submodules::{get_submodules, update_submodules};
 use crate::version::Version;
 use crate::ws::workspace::Workspace;
 use crate::{
@@ -26,14 +27,6 @@ use crate::{
 };
 
 use crate::release::Release;
-
-struct SubmoduleInfo<'a> {
-    name: String,
-    repo: &'a Repository,
-    tag_oid: Option<String>,
-    tag_name: Option<String>,
-    push_rc_tags: bool,
-}
 
 pub fn start(release: &mut Release, version: &Version, notes: &PathBuf) -> ReleaseResult<()> {
     // 1. sync rw repos to force authorized connect
@@ -314,29 +307,7 @@ pub fn perform_release(
 ) -> ReleaseResult<()> {
     // start release candidate on the various repositories, except
     // 's3gw.git'.
-    let mut submodules = vec![
-        SubmoduleInfo {
-            name: "ui".into(),
-            repo: &ws.repos.ui,
-            tag_oid: None,
-            tag_name: None,
-            push_rc_tags: true,
-        },
-        SubmoduleInfo {
-            name: "charts".into(),
-            repo: &ws.repos.charts,
-            tag_oid: None,
-            tag_name: None,
-            push_rc_tags: true,
-        },
-        SubmoduleInfo {
-            name: "ceph".into(),
-            repo: &ws.repos.ceph,
-            tag_oid: None,
-            tag_name: None,
-            push_rc_tags: true,
-        },
-    ];
+    let mut submodules = get_submodules(&ws);
 
     infoln!("Tagging repositories...");
     for entry in &mut submodules {
@@ -345,7 +316,7 @@ pub fn perform_release(
             entry.repo.name,
             next_ver
         );
-        let (tag_name, tag_oid) = match entry.repo.tag_release_branch(&relver, &next_ver) {
+        match entry.repo.tag_release_branch(&relver, &next_ver) {
             Ok((tag_name, tag_oid)) => {
                 log::debug!(
                     "Tagged version '{}' with '{}' oid {} name {}",
@@ -354,7 +325,6 @@ pub fn perform_release(
                     tag_oid,
                     tag_name,
                 );
-                (tag_name, tag_oid)
             }
             Err(err) => {
                 errorln!(
@@ -366,8 +336,6 @@ pub fn perform_release(
                 return Err(ReleaseError::TaggingError);
             }
         };
-        entry.tag_oid = Some(tag_oid);
-        entry.tag_name = Some(tag_name);
     }
 
     // repositories have been tagged -- push them out so we can update the
@@ -390,10 +358,6 @@ pub fn perform_release(
             }
         };
 
-        if !entry.push_rc_tags && next_ver.rc.is_some() {
-            continue;
-        }
-
         match entry.repo.push_release_tag(&next_ver) {
             Ok(()) => {
                 log::debug!("Pushed '{}' to repository '{}'!", next_ver, entry.name);
@@ -415,30 +379,17 @@ pub fn perform_release(
     // update submodules on 's3gw.git' to reflect the current state of each
     // repository.
     infoln!("Updating submodules...");
-    for entry in &submodules {
-        let tag_name = match &entry.tag_name {
-            None => {
-                errorln!("Tag name for submodule '{}' not set!", entry.name);
-                return Err(ReleaseError::SubmoduleError);
-            }
-            Some(n) => n,
-        };
-        let path = match ws
-            .repos
-            .s3gw
-            .set_submodule_head(&entry.name, &tag_name, true)
-        {
-            Ok(p) => {
-                log::debug!("Updated submodule '{}'", entry.name);
-                p
-            }
-            Err(err) => {
-                errorln!("Error updating submodule '{}': {}", entry.name, err);
-                return Err(ReleaseError::SubmoduleError);
-            }
-        };
-        paths_to_add.push(path);
-    }
+    let mut sub_paths = match update_submodules(&ws, &next_ver) {
+        Ok(v) => {
+            infoln!("Updated submodules to {}", next_ver);
+            v
+        }
+        Err(()) => {
+            errorln!("Error updating submodules to {}", next_ver);
+            return Err(ReleaseError::SubmoduleError);
+        }
+    };
+    paths_to_add.append(&mut sub_paths);
 
     infoln!("Finalizing release...");
     if let Some(notes_file) = notes {

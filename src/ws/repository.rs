@@ -616,12 +616,7 @@ impl Repository {
         tagver: &Version,
     ) -> RepositoryResult<(String, String)> {
         let branch_name = relver.to_str_fmt(&self.config.release_branch_format);
-        let base_tag_name = tagver.to_str_fmt(&self.config.tag_format);
-        let tag_name = if let Some(rc) = tagver.rc {
-            format!("{}-rc{}", base_tag_name, rc)
-        } else {
-            base_tag_name.clone()
-        };
+        let tag_name = tagver.to_rc_str_fmt(&self.config.tag_format);
 
         let patchver = if let Some(v) = &relver.patch {
             v

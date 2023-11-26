@@ -136,6 +136,15 @@ impl Version {
         hb.render("version", &data).unwrap()
     }
 
+    pub fn to_rc_str_fmt(self: &Self, fmt: &String) -> String {
+        let base = self.to_str_fmt(&fmt);
+        if let Some(rc) = self.rc {
+            format!("{}-rc{}", base, rc)
+        } else {
+            base
+        }
+    }
+
     pub fn get_version_id(self: &Self) -> u64 {
         let mut patch: u64 = 999;
         let mut rc: u64 = 999;
