@@ -844,17 +844,7 @@ impl Repository {
         Ok(())
     }
 
-    /// Commit a given release version, tagging it with the appropriate version.
-    ///
-    pub fn commit_release(self: &Self, relver: &Version, tagver: &Version) -> RepositoryResult<()> {
-        let relver_str = format!("v{}", relver);
-        let commit_msg = if let Some(rc) = &tagver.rc {
-            format!("release candidate {} for {}", rc, relver_str)
-        } else {
-            format!("release {}", relver_str)
-        };
-
-        log::debug!("Committing release ver '{}' tag '{}'", relver, tagver);
+    pub fn commit(self: &Self, commit_msg: &String) -> RepositoryResult<()> {
         match std::process::Command::new("git")
             .args([
                 "-C",
@@ -869,15 +859,33 @@ impl Repository {
         {
             Ok(res) => {
                 if !res.success() {
-                    log::error!("Unable to commit '{}': {}", tagver, res.code().unwrap());
-                    return Err(RepositoryError::UnknownError);
+                    log::error!("Unable to commit: {}", res.code().unwrap());
+                    return Err(RepositoryError::CommitError);
                 }
+                Ok(())
             }
             Err(err) => {
-                log::error!("Unable to commit '{}': {}", tagver, err);
-                return Err(RepositoryError::UnknownError);
+                log::error!("Error committing: {}", err);
+                Err(RepositoryError::CommitError)
             }
+        }
+    }
+
+    /// Commit a given release version, tagging it with the appropriate version.
+    ///
+    pub fn commit_release(self: &Self, relver: &Version, tagver: &Version) -> RepositoryResult<()> {
+        let relver_str = format!("v{}", relver);
+        let commit_msg = if let Some(rc) = &tagver.rc {
+            format!("release candidate {} for {}", rc, relver_str)
+        } else {
+            format!("release {}", relver_str)
         };
+
+        log::debug!("Committing release ver '{}' tag '{}'", relver, tagver);
+        if let Err(err) = self.commit(&commit_msg) {
+            log::error!("Unable to commit '{}': {}", tagver, err);
+            return Err(err);
+        }
 
         let tag_name = self.version_to_str(&tagver, true);
         log::debug!("Tag release with '{}'", tag_name);

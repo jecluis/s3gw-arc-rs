@@ -23,6 +23,7 @@ pub enum RepositoryError {
     SubmoduleHeadUpdateError,
     StagingError,
     DiffError,
+    CommitError,
 
     // git related errors
     FetchingError,
@@ -45,6 +46,7 @@ impl Display for RepositoryError {
             RepositoryError::SubmoduleHeadUpdateError => "error updating submodule HEAD",
             RepositoryError::StagingError => "error staging paths",
             RepositoryError::DiffError => "error obtaining commit difference",
+            RepositoryError::CommitError => "error committing to repository",
 
             // git related errors
             RepositoryError::FetchingError => "error fetching from remote",
