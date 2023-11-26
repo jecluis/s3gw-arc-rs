@@ -14,6 +14,8 @@
 
 use std::path::PathBuf;
 
+use git2::Reference;
+
 use crate::common::UpdateProgress;
 
 pub struct GitRepo {
@@ -369,13 +371,18 @@ impl GitRepo {
         Ok(refs)
     }
 
+    pub fn get_default_branch(self: &Self) -> (String, Reference) {
+        let head_ref = self.repo.find_reference("refs/remotes/ro/HEAD").unwrap();
+        let head_name = head_ref.symbolic_target().unwrap();
+        (String::from(head_name), head_ref)
+    }
+
     /// Create a branch from this repository's default branch. The default
     /// branch is whatever is pointed to by the repository's
     /// 'refs/remotes/ro/HEAD' at the time.
     ///
     pub fn branch_from_default(self: &Self, dst: &String) -> Result<(), ()> {
-        let head_ref = self.repo.find_reference("refs/remotes/ro/HEAD").unwrap();
-        let head_name = head_ref.symbolic_target().unwrap();
+        let (head_name, head_ref) = self.get_default_branch();
         let head_commit = head_ref.peel_to_commit().unwrap();
 
         log::debug!(
