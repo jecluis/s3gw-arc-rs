@@ -269,7 +269,7 @@ pub async fn handle_cmds(cmd: &Cmds) {
             };
 
             infoln!("Finish release process for version {}", relver);
-            match crate::release::process::finish::finish(&mut release, &relver) {
+            match crate::release::process::finish::finish(&mut release, &relver).await {
                 Ok(()) => {
                     successln!("Finished release {}!", relver);
                 }
