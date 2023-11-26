@@ -89,6 +89,10 @@ pub struct FinishCommand {
     /// Release version to finish (e.g., v0.17.1)
     #[arg(value_name = "VERSION", short, long)]
     version: Option<String>,
+
+    /// Force finishing a release regardless of previous candidae state
+    #[arg(short, long)]
+    force: bool,
 }
 
 #[derive(clap::Args)]
@@ -269,7 +273,9 @@ pub async fn handle_cmds(cmd: &Cmds) {
             };
 
             infoln!("Finish release process for version {}", relver);
-            match crate::release::process::finish::finish(&mut release, &relver).await {
+            match crate::release::process::finish::finish(&mut release, &relver, finish_cmd.force)
+                .await
+            {
                 Ok(()) => {
                     successln!("Finished release {}!", relver);
                 }

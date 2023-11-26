@@ -42,7 +42,7 @@ struct CreatePullRequestResponse {
     pub number: i64,
 }
 
-pub async fn finish(release: &mut Release, version: &Version) -> ReleaseResult<()> {
+pub async fn finish(release: &mut Release, version: &Version, force: bool) -> ReleaseResult<()> {
     // 1. check whether release has been finished
     // 2. check whether release has been started
     // 3. sync repositories for the specified release
@@ -71,6 +71,11 @@ pub async fn finish(release: &mut Release, version: &Version) -> ReleaseResult<(
             return Err(ReleaseError::SyncError);
         }
     };
+
+    if let Err(err) = super::validate::check_can_release(&ws, &version, force).await {
+        boomln!("Can't finish release due to validation error: {}", err);
+        return Err(err);
+    }
 
     let max = match release_versions.last_key_value() {
         None => {
