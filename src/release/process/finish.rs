@@ -232,6 +232,25 @@ async fn finish_s3gw_update_default(
         return Err(ReleaseError::UnknownError);
     }
 
+    // sync new branch's submodules, so we can figure out later whether we need
+    // to update to match the new release (and thus commit those changes).
+    match ws.repos.s3gw.update(true) {
+        Ok(()) => {
+            log::trace!(
+                "Updated and synchronized submodules for branch '{}'",
+                dst_branch
+            );
+        }
+        Err(err) => {
+            log::error!(
+                "Error updating and synchronizing submodules for branch '{}': {}",
+                dst_branch,
+                err
+            );
+            return Err(ReleaseError::UnknownError);
+        }
+    };
+
     // update s3gw submodules to match release
     let mut subpaths = match super::submodules::update_submodules(&ws, &relver) {
         Ok(p) => p,
