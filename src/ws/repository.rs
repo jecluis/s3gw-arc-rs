@@ -494,6 +494,24 @@ impl Repository {
         }
     }
 
+    pub fn get_default_branch_name(self: &Self) -> RepositoryResult<String> {
+        let git = match git::repo::GitRepo::open(&self.path) {
+            Ok(v) => v,
+            Err(()) => {
+                log::error!("Unable to open git repository at '{}'", self.path.display());
+                return Err(RepositoryError::UnableToOpenRepositoryError);
+            }
+        };
+        let (head_name, _) = git.get_default_branch();
+        match head_name.strip_prefix("refs/remotes/ro/") {
+            None => {
+                log::error!("Unable to obtain default branch name from '{}'", head_name);
+                return Err(RepositoryError::UnknownError);
+            }
+            Some(v) => Ok(String::from(v)),
+        }
+    }
+
     /// Create a new branch for version 'ver' from this repository's default branch.
     ///
     pub fn branch_version_from_default(self: &Self, ver: &Version) -> RepositoryResult<()> {
